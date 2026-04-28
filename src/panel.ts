@@ -1,5 +1,7 @@
 export {};
 
+// ===== 型別定義：聊天、API、流程、授權 =====
+
 declare const chrome:
   | {
       identity?: {
@@ -76,6 +78,7 @@ type AuthState = {
   accountEmail: string;
 };
 
+// ===== 常數、儲存 key、DOM 節點快取 =====
 const STORAGE_KEY = "chatMessages";
 const SESSION_ID_KEY = "chatSessionId";
 const WORKFLOWS_KEY = "savedWorkflows";
@@ -94,9 +97,6 @@ const chatPanelEl = document.getElementById("chatPanel") as HTMLDivElement;
 const chatMessagesEl = document.getElementById("chatMessages") as HTMLDivElement;
 const chatFormEl = document.getElementById("chatForm") as HTMLFormElement;
 const chatInputEl = document.getElementById("chatInput") as HTMLTextAreaElement;
-const skillConfirmEl = document.getElementById("skillConfirm") as HTMLDivElement;
-const skillUseButton = document.getElementById("skillUse") as HTMLButtonElement;
-const skillSkipButton = document.getElementById("skillSkip") as HTMLButtonElement;
 const sendMessageButton = document.getElementById("sendMessage") as HTMLButtonElement;
 const clearChatButton = document.getElementById("clearChat") as HTMLButtonElement;
 const authStatusEl = document.getElementById("authStatus") as HTMLParagraphElement;
@@ -123,7 +123,11 @@ const manualApiActionsEl = document.getElementById("manualApiActions") as HTMLDi
 const apiDetailNameEl = document.getElementById("apiDetailName") as HTMLDivElement;
 const apiDetailPurposeEl = document.getElementById("apiDetailPurpose") as HTMLDivElement;
 const apiDetailParamsEl = document.getElementById("apiDetailParams") as HTMLDivElement;
+const cancelApiDetailButton = document.getElementById("cancelApiDetail") as HTMLButtonElement;
+const apiDetailActionsEl = document.getElementById("apiDetailActions") as HTMLDivElement;
 const addStepButton = document.getElementById("addStep") as HTMLButtonElement;
+const saveDetailApiButton = document.getElementById("saveDetailApi") as HTMLButtonElement;
+const updateDetailApiButton = document.getElementById("updateDetailApi") as HTMLButtonElement;
 const draftStepsEl = document.getElementById("draftSteps") as HTMLOListElement;
 const runWorkflowButton = document.getElementById("runWorkflow") as HTMLButtonElement;
 const saveWorkflowButton = document.getElementById("saveWorkflow") as HTMLButtonElement;
@@ -154,6 +158,8 @@ let customApiSpecs: ApiSpec[] = [];
 let savedWorkflows: SavedWorkflow[] = [];
 let draftSteps: WorkflowStep[] = [];
 let selectedApiIndex = -1;
+let pinnedDetailSpec: ApiSpec | null = null;
+let pinnedSavedApiIndex = -1;
 let chatPanelOpen = true;
 let workflowPanelOpen = true;
 let curlParserOpen = false;
@@ -163,11 +169,11 @@ let savedApisOpen = false;
 let editedDetailSpec: ApiSpec | null = null;
 let editingStepIndex = -1;
 let editingApiIndex = -1;
-let pendingUserMessage = "";
 let currentWorkflowName = "";
 const fallbackStorage = new Map<string, string>();
 const extensionChrome = typeof chrome !== "undefined" ? chrome : undefined;
 
+// ===== 授權狀態與共用 UI 提示 =====
 function isAuthStateValid(state: AuthState): boolean {
   return Boolean(
     state.firebaseIdToken &&
@@ -205,7 +211,9 @@ function isAuthExpired(): boolean {
 function notifyAuthExpired(): void {
   clearAuthStateInMemory();
   setChatEnabled(false);
-  setAuthStatus("授權已失效，請重新點擊「Google 授權」登入。", "error");
+  const msg = "授權已失效，請重新點擊「Google 授權」登入。";
+  setAuthStatus(msg, "error");
+  setToast(msg, "error", 5000);
   authorizeGoogleButton.classList.add("auth-expired-pulse");
 }
 
@@ -323,22 +331,12 @@ function setWorkflowPanelOpen(open: boolean): void {
 function setChatEnabled(enabled: boolean): void {
   chatInputEl.disabled = !enabled;
   sendMessageButton.disabled = !enabled;
-  skillUseButton.disabled = !enabled;
-  skillSkipButton.disabled = !enabled;
   chatInputEl.placeholder = enabled
     ? "例如：業務離職了，我要移除他的 sales 與 lineUser 身份"
     : "請先完成 Google 授權後，才可使用對話窗";
 }
 
-function toggleSkillConfirm(show: boolean): void {
-  skillConfirmEl.classList.toggle("hidden", !show);
-}
-
-function shouldPromptSkillConfirm(message: string): boolean {
-  if (getAllApiCandidates().length > 0) return true;
-  return /(api|權限|流程|查詢|刪除|新增|更新)/i.test(message);
-}
-
+// ===== 自訂 API 表單輔助（欄位正規化 / Header 管理） =====
 function buildMessageWithSkillDirective(rawMessage: string, useSkill: boolean): string {
   if (!useSkill) return rawMessage;
   return `${rawMessage}
@@ -486,6 +484,7 @@ function collectManualHeaders(): Record<string, string> {
   return out;
 }
 
+// ===== curl / 對話內容解析為 API 候選 =====
 function extractCurlUrl(text: string): string {
   const normalized = text
     .replace(/\\\r?\n/g, " ")
@@ -530,7 +529,12 @@ function inferParamsFromPathAndBody(path: string, body: string): string[] {
   try {
     const qIdx = path.indexOf("?");
     if (qIdx >= 0) {
-      fromQuery = Array.from(new URLSearchParams(path.slice(qIdx + 1)).keys());
+      const sp = new URLSearchParams(path.slice(qIdx + 1));
+      const qKeys: string[] = [];
+      sp.forEach((_v, k) => {
+        qKeys.push(k);
+      });
+      fromQuery = Array.from(new Set(qKeys));
     }
   } catch {
     fromQuery = [];
@@ -590,6 +594,108 @@ function parseCurlCommand(curlText: string): {
   };
 }
 
+/** Collect curl command strings from assistant markdown (fenced + unfenced). */
+function collectCurlSnippetsFromText(text: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const add = (raw: string): void => {
+    const t = raw.trim();
+    if (t.length < 10 || !/^curl\b/i.test(t)) return;
+    if (seen.has(t)) return;
+    seen.add(t);
+    out.push(t);
+  };
+
+  for (const m of text.matchAll(/```(?:[a-zA-Z0-9_-]+)?\s*([\s\S]*?)```/g)) {
+    const inner = m[1] ?? "";
+    for (const piece of inner.split(/(?=^\s*curl\s)/im)) {
+      if (/^\s*curl\s/im.test(piece)) add(piece);
+    }
+  }
+
+  const unfenced = text.replace(/```[\s\S]*?```/g, "\n");
+  let search = 0;
+  while (search < unfenced.length) {
+    const tail = unfenced.slice(search);
+    const rel = tail.search(/\bcurl\s/i);
+    if (rel < 0) break;
+    const idx = search + rel;
+    const atLineStart = idx === 0 || unfenced[idx - 1] === "\n";
+    if (!atLineStart) {
+      search = idx + 4;
+      continue;
+    }
+    const rest = unfenced.slice(idx + 4);
+    const nextRel = rest.search(/\n\s*curl\s/i);
+    const end = nextRel < 0 ? unfenced.length : idx + 4 + nextRel;
+    add(unfenced.slice(idx, end));
+    search = end;
+  }
+
+  return out;
+}
+
+function apiSpecFromParsedCurl(p: NonNullable<ReturnType<typeof parseCurlCommand>>): ApiSpec {
+  const path = p.url.trim();
+  const headers: Record<string, string> = {};
+  for (const [k, v] of Object.entries(p.headers)) {
+    if (k.toLowerCase() === "authorization") continue;
+    headers[k] = v;
+  }
+  return {
+    api: path,
+    path,
+    method: p.method,
+    headers,
+    bodyTemplate: p.body.trim() ? p.body : undefined,
+    bearerToken: p.bearerToken || undefined,
+    purpose: "從對話中的 curl 偵測",
+    params: inferParamsFromPathAndBody(path, p.body),
+  };
+}
+
+/** 用於合併「完整 URL」與相對 path，保留較完整者。 */
+function preferRicherPath(a?: string, b?: string): string | undefined {
+  const x = (a ?? "").trim();
+  const y = (b ?? "").trim();
+  if (!x) return y || undefined;
+  if (!y) return x || undefined;
+  if (/^https?:\/\//i.test(x) && !/^https?:\/\//i.test(y)) return x;
+  if (/^https?:\/\//i.test(y) && !/^https?:\/\//i.test(x)) return y;
+  return x.length >= y.length ? x : y;
+}
+
+/** 候選 Map 的 key：URL 轉成 pathname+search，便於與相對路徑對齊。 */
+function endpointKey(raw: string): string {
+  const t = raw.trim();
+  if (!t) return "";
+  try {
+    if (/^https?:\/\//i.test(t)) {
+      const u = new URL(t);
+      return (u.pathname.replace(/\/+$/, "") || "/") + u.search;
+    }
+  } catch {
+    // ignore
+  }
+  return t.replace(/^\/+/, "");
+}
+
+function pathTail2(pathKey: string): string {
+  return pathKey.split("/").filter(Boolean).slice(-2).join("/");
+}
+
+/** 若已存在僅差在 host/prefix 的同一端點，合併為同一筆（避免 GET 預設與 curl POST 分兩列）。 */
+function findExistingMergeKey(map: Map<string, ApiSpec>, next: ApiSpec): string | undefined {
+  const nk = endpointKey(next.path || next.api);
+  const nTail = pathTail2(nk);
+  if (!nTail) return undefined;
+  for (const [mapKey, spec] of map) {
+    const ek = endpointKey(spec.path || spec.api);
+    if (pathTail2(ek) === nTail) return mapKey;
+  }
+  return undefined;
+}
+
 function mergeApiSpecs(primary: ApiSpec[], secondary: ApiSpec[]): ApiSpec[] {
   const map = new Map<string, ApiSpec>();
   const upsert = (next: ApiSpec): void => {
@@ -622,10 +728,32 @@ function getAllApiCandidates(): ApiSpec[] {
   return [...apiCandidates];
 }
 
+function findSavedApiIndex(spec: ApiSpec | null): number {
+  if (!spec) return -1;
+  const key = (spec.path || spec.api || "").trim();
+  if (!key) return -1;
+  return customApiSpecs.findIndex((c) => (c.path || c.api || "").trim() === key);
+}
+
+function refreshApiDetailActions(spec: ApiSpec | null): void {
+  const hasSpec = !!spec;
+  const savedIndex = pinnedSavedApiIndex;
+  addStepButton.disabled = !hasSpec;
+  saveDetailApiButton.disabled = !hasSpec;
+  updateDetailApiButton.disabled = !hasSpec || savedIndex < 0;
+  updateDetailApiButton.style.display = savedIndex >= 0 ? "block" : "none";
+  apiDetailActionsEl.classList.toggle("hidden", !hasSpec);
+}
+
 function extractApiCandidatesFromText(text: string): ApiSpec[] {
   const specs = new Map<string, ApiSpec>();
   const upsert = (next: ApiSpec): void => {
-    const key = next.path || next.api;
+    const rawKey = (next.path || next.api).trim();
+    if (!rawKey) return;
+    const existingKey = findExistingMergeKey(specs, next);
+    const nk = endpointKey(rawKey);
+    const key = existingKey ?? (nk || rawKey);
+
     const current = specs.get(key);
     if (!current) {
       specs.set(key, {
@@ -635,16 +763,26 @@ function extractApiCandidatesFromText(text: string): ApiSpec[] {
       return;
     }
     const mergedParams = Array.from(new Set([...current.params, ...next.params].map((p) => p.trim()).filter(Boolean)));
+    const mergedPath = preferRicherPath(current.path, next.path);
+    const mergedApi = preferRicherPath(current.api, next.api);
     specs.set(key, {
       ...current,
       ...next,
-      api: current.api || next.api,
-      path: current.path || next.path,
+      api: mergedApi || current.api || next.api,
+      path: mergedPath || current.path || next.path,
       requestName: current.requestName || next.requestName,
+      method: next.method || current.method,
+      bodyTemplate: next.bodyTemplate || current.bodyTemplate,
+      headers: { ...(current.headers || {}), ...(next.headers || {}) },
       purpose: current.purpose !== "待補充目的" ? current.purpose : next.purpose,
       params: mergedParams,
     });
   };
+
+  for (const snippet of collectCurlSnippetsFromText(text)) {
+    const parsed = parseCurlCommand(snippet);
+    if (parsed) upsert(apiSpecFromParsedCurl(parsed));
+  }
 
   const jsonBlocks = Array.from(text.matchAll(/```json([\s\S]*?)```/g));
   for (const block of jsonBlocks) {
@@ -666,7 +804,35 @@ function extractApiCandidatesFromText(text: string): ApiSpec[] {
         const params = normalizeParams(obj.params || obj.requiredParams || obj.arguments);
         const path = String(obj.path || obj.endpoint || "").trim() || undefined;
         const requestName = String(obj.requestName || obj.request || "").trim() || undefined;
-        upsert({ api: path || api, path, requestName, purpose, params });
+        const mRaw = obj.method ?? obj.httpMethod ?? obj.verb;
+        const method = typeof mRaw === "string" && mRaw.trim() ? mRaw.trim().toUpperCase() : undefined;
+        let bodyTemplate: string | undefined;
+        if (typeof obj.body === "string") bodyTemplate = obj.body;
+        else if (typeof obj.bodyTemplate === "string") bodyTemplate = obj.bodyTemplate;
+        else if (obj.body && typeof obj.body === "object" && !Array.isArray(obj.body)) {
+          try {
+            bodyTemplate = JSON.stringify(obj.body, null, 2);
+          } catch {
+            bodyTemplate = undefined;
+          }
+        }
+        let headers: Record<string, string> | undefined;
+        if (obj.headers && typeof obj.headers === "object" && !Array.isArray(obj.headers)) {
+          headers = {};
+          for (const [k, v] of Object.entries(obj.headers as Record<string, unknown>)) {
+            if (typeof v === "string") headers[k] = v;
+          }
+        }
+        upsert({
+          api: path || api,
+          path,
+          requestName,
+          purpose,
+          params,
+          ...(method ? { method } : {}),
+          ...(bodyTemplate ? { bodyTemplate } : {}),
+          ...(headers && Object.keys(headers).length ? { headers } : {}),
+        });
       }
     } catch {
       // ignore invalid JSON blocks
@@ -708,6 +874,7 @@ function extractApiCandidatesFromText(text: string): ApiSpec[] {
   return Array.from(specs.values()).slice(0, 20);
 }
 
+// ===== API 設定區渲染與互動 =====
 function buildDetailSection(label: string, defaultOpen: boolean): { wrap: HTMLDivElement; body: HTMLDivElement } {
   const wrap = document.createElement("div");
   wrap.className = "detail-section";
@@ -726,21 +893,71 @@ function buildDetailSection(label: string, defaultOpen: boolean): { wrap: HTMLDi
   return { wrap, body };
 }
 
+function resetApiDetail(): void {
+  apiDetailNameEl.textContent = "尚未選擇 API";
+  apiDetailPurposeEl.replaceChildren();
+  apiDetailParamsEl.replaceChildren();
+  addStepButton.textContent = "加入流程步驟";
+  addStepButton.classList.remove("updating");
+  editedDetailSpec = null;
+  editingStepIndex = -1;
+  refreshApiDetailActions(null);
+  renderDraftSteps();
+}
+
 function renderApiDetail(spec: ApiSpec | null): void {
   if (!spec) {
-    apiDetailNameEl.textContent = "尚未選擇 API";
-    apiDetailPurposeEl.textContent = "用途：-";
-    apiDetailParamsEl.replaceChildren();
-    editedDetailSpec = null;
+    resetApiDetail();
     return;
   }
 
   editedDetailSpec = { ...spec, params: [...(spec.params ?? [])], headers: { ...(spec.headers ?? {}) } };
 
   apiDetailNameEl.textContent = spec.requestName ?? spec.api;
-  const purposeText = (spec.purpose ?? "").trim();
-  apiDetailPurposeEl.textContent = purposeText ? `用途：${purposeText}` : "";
-  apiDetailPurposeEl.style.display = purposeText ? "" : "none";
+
+  apiDetailPurposeEl.replaceChildren();
+  const nameWrap = document.createElement("div");
+  nameWrap.className = "api-detail-purpose-edit";
+  const nameLabel = document.createElement("label");
+  nameLabel.className = "api-detail-purpose-label";
+  nameLabel.setAttribute("for", "apiDetailNameInput");
+  nameLabel.textContent = "API 名稱";
+  const nameInput = document.createElement("input");
+  nameInput.id = "apiDetailNameInput";
+  nameInput.type = "text";
+  nameInput.className = "api-detail-purpose-input";
+  nameInput.placeholder = "顯示名稱（例如：MedSalesRollbackRequest）";
+  nameInput.value = (spec.requestName ?? spec.api ?? "").trim();
+  nameInput.autocomplete = "off";
+  nameInput.addEventListener("input", () => {
+    if (!editedDetailSpec) return;
+    const nextName = nameInput.value.trim();
+    editedDetailSpec.requestName = nextName || undefined;
+    apiDetailNameEl.textContent = nextName || editedDetailSpec.api || "尚未命名 API";
+  });
+  nameWrap.appendChild(nameLabel);
+  nameWrap.appendChild(nameInput);
+  apiDetailPurposeEl.appendChild(nameWrap);
+
+  const purposeWrap = document.createElement("div");
+  purposeWrap.className = "api-detail-purpose-edit";
+  const purposeLabel = document.createElement("label");
+  purposeLabel.className = "api-detail-purpose-label";
+  purposeLabel.setAttribute("for", "apiDetailPurposeInput");
+  purposeLabel.textContent = "用途";
+  const purposeInput = document.createElement("input");
+  purposeInput.id = "apiDetailPurposeInput";
+  purposeInput.type = "text";
+  purposeInput.className = "api-detail-purpose-input";
+  purposeInput.placeholder = "簡短說明此 API 的用途（可選）";
+  purposeInput.value = (spec.purpose ?? "").trim();
+  purposeInput.autocomplete = "off";
+  purposeInput.addEventListener("input", () => {
+    if (editedDetailSpec) editedDetailSpec.purpose = purposeInput.value;
+  });
+  purposeWrap.appendChild(purposeLabel);
+  purposeWrap.appendChild(purposeInput);
+  apiDetailPurposeEl.appendChild(purposeWrap);
 
   const container = document.createDocumentFragment();
 
@@ -761,48 +978,70 @@ function renderApiDetail(spec: ApiSpec | null): void {
   } catch {
     /**/
   }
-  const allParamKeys = [...new Set([...(spec.params ?? []), ...Object.keys(urlParamObj)])];
+  const urlParamKeys = [...new Set(Object.keys(urlParamObj))];
 
-  if (allParamKeys.length) {
-    const sec = buildDetailSection("Params（URL 查詢參數）", true);
-    const list = document.createElement("div");
-    list.className = "detail-edit-list";
-    allParamKeys.forEach((key) => {
-      const row = document.createElement("div");
-      row.className = "detail-edit-row";
-      const label = document.createElement("span");
-      label.className = "detail-edit-key";
-      label.textContent = key;
-      const inp = document.createElement("input");
-      inp.type = "text";
-      inp.className = "detail-edit-input";
-      inp.value = urlParamObj[key] ?? "";
-      inp.placeholder = "（值）";
-      inp.addEventListener("input", () => {
-        if (!editedDetailSpec) return;
-        try {
-          const base = (editedDetailSpec.path ?? editedDetailSpec.api ?? "").split("?")[0];
-          const collected: Record<string, string> = {};
-          list.querySelectorAll<HTMLDivElement>(".detail-edit-row").forEach((r) => {
-            const k = (r.querySelector(".detail-edit-key") as HTMLSpanElement).textContent ?? "";
-            const v = (r.querySelector(".detail-edit-input") as HTMLInputElement).value;
-            if (v) collected[k] = v;
-          });
-          const qs = new URLSearchParams(collected).toString();
-          const newPath = qs ? `${base}?${qs}` : base;
-          editedDetailSpec.path = newPath;
-          urlCode.textContent = `${editedDetailSpec.method ?? "GET"} ${newPath}`;
-        } catch {
-          /**/
-        }
+  const urlParamsSec = buildDetailSection(`Params（URL 查詢參數，${urlParamKeys.length} 個）`, true);
+  const urlParamsList = document.createElement("div");
+  urlParamsList.className = "detail-edit-list";
+
+  const rebuildUrlParams = () => {
+    if (!editedDetailSpec) return;
+    try {
+      const base = (editedDetailSpec.path ?? editedDetailSpec.api ?? "").split("?")[0];
+      const collected: Record<string, string> = {};
+      urlParamsList.querySelectorAll<HTMLDivElement>(".detail-edit-row").forEach((r) => {
+        const key = (r.querySelector(".detail-edit-key-input") as HTMLInputElement)?.value.trim() ?? "";
+        const val = (r.querySelector(".detail-edit-val-input") as HTMLInputElement)?.value ?? "";
+        if (key && val) collected[key] = val;
       });
-      row.appendChild(label);
-      row.appendChild(inp);
-      list.appendChild(row);
+      const qs = new URLSearchParams(collected).toString();
+      const newPath = qs ? `${base}?${qs}` : base;
+      editedDetailSpec.path = newPath;
+      editedDetailSpec.params = Array.from(new Set([...(editedDetailSpec.params ?? []), ...Object.keys(collected)]));
+      urlCode.textContent = `${editedDetailSpec.method ?? "GET"} ${newPath}`;
+    } catch {
+      // ignore parse/update errors for incomplete editing state
+    }
+  };
+
+  const addEditableUrlParamRow = (key: string, value: string) => {
+    const row = document.createElement("div");
+    row.className = "detail-edit-row";
+    const keyInput = document.createElement("input");
+    keyInput.type = "text";
+    keyInput.className = "detail-edit-key-input detail-edit-input";
+    keyInput.value = key;
+    keyInput.placeholder = "Param key";
+    const valInput = document.createElement("input");
+    valInput.type = "text";
+    valInput.className = "detail-edit-val-input detail-edit-input";
+    valInput.value = value;
+    valInput.placeholder = "value";
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "header-remove";
+    removeBtn.textContent = "✕";
+    removeBtn.addEventListener("click", () => {
+      row.remove();
+      rebuildUrlParams();
     });
-    sec.body.appendChild(list);
-    container.appendChild(sec.wrap);
-  }
+    keyInput.addEventListener("input", rebuildUrlParams);
+    valInput.addEventListener("input", rebuildUrlParams);
+    row.appendChild(keyInput);
+    row.appendChild(valInput);
+    row.appendChild(removeBtn);
+    urlParamsList.appendChild(row);
+  };
+
+  urlParamKeys.forEach((key) => addEditableUrlParamRow(key, urlParamObj[key] ?? ""));
+  const addParamBtn = document.createElement("button");
+  addParamBtn.type = "button";
+  addParamBtn.className = "detail-add-row-btn";
+  addParamBtn.textContent = "＋ 新增 Param";
+  addParamBtn.addEventListener("click", () => addEditableUrlParamRow("", ""));
+  urlParamsSec.body.appendChild(urlParamsList);
+  urlParamsSec.body.appendChild(addParamBtn);
+  container.appendChild(urlParamsSec.wrap);
 
   // ── Headers ──
   const visibleHeaders = Object.entries(spec.headers ?? {}).filter(([k]) => k.toLowerCase() !== "authorization");
@@ -873,12 +1112,15 @@ function renderApiDetail(spec: ApiSpec | null): void {
   container.appendChild(bodySec.wrap);
 
   apiDetailParamsEl.replaceChildren(container);
+  refreshApiDetailActions(spec);
 }
 
 function refreshApiCandidatesFromLatestAssistant(): void {
   const latestAssistant = [...messages].reverse().find((m) => m.role === "assistant" && m.content.trim());
   apiCandidates = latestAssistant ? extractApiCandidatesFromText(latestAssistant.content) : [];
-  selectedApiIndex = apiCandidates.length ? 0 : -1;
+  selectedApiIndex = -1;
+  pinnedDetailSpec = null;
+  pinnedSavedApiIndex = -1;
   renderApiCandidates();
 }
 
@@ -889,11 +1131,17 @@ function isCustomSpec(spec: ApiSpec): boolean {
 function removeCustomSpec(spec: ApiSpec): void {
   const key = spec.path || spec.api;
   customApiSpecs = customApiSpecs.filter((c) => (c.path || c.api) !== key);
+  const pinnedKey = pinnedDetailSpec ? pinnedDetailSpec.path || pinnedDetailSpec.api : "";
+  if (pinnedKey && pinnedKey === key) {
+    pinnedDetailSpec = null;
+    pinnedSavedApiIndex = -1;
+  }
 }
 function renderApiCandidates(): void {
   const allCandidates = getAllApiCandidates();
   apiCandidatesEl.replaceChildren();
   if (!allCandidates.length) {
+    selectedApiIndex = -1;
     const empty = document.createElement("div");
     empty.className = "workflow-subtitle";
     empty.textContent = "尚未偵測到 API，可手動新增。";
@@ -901,8 +1149,8 @@ function renderApiCandidates(): void {
     renderApiDetail(null);
     return;
   }
-  if (selectedApiIndex < 0 || selectedApiIndex >= allCandidates.length) {
-    selectedApiIndex = 0;
+  if (selectedApiIndex >= allCandidates.length) {
+    selectedApiIndex = allCandidates.length - 1;
   }
   allCandidates.forEach((spec, index) => {
     const wrap = document.createElement("div");
@@ -924,6 +1172,8 @@ function renderApiCandidates(): void {
     }
     row.addEventListener("click", () => {
       selectedApiIndex = index;
+      pinnedDetailSpec = null;
+      pinnedSavedApiIndex = -1;
       renderApiCandidates();
     });
     wrap.appendChild(row);
@@ -944,9 +1194,11 @@ function renderApiCandidates(): void {
     }
     apiCandidatesEl.appendChild(wrap);
   });
-  renderApiDetail(allCandidates[selectedApiIndex] || null);
+  const selectedSpec = selectedApiIndex >= 0 ? allCandidates[selectedApiIndex] || null : pinnedDetailSpec;
+  renderApiDetail(selectedSpec || null);
 }
 
+// ===== 流程草稿、已儲存流程、已儲存 API =====
 function renderDraftSteps(): void {
   draftStepsEl.replaceChildren();
   if (!draftSteps.length) {
@@ -997,6 +1249,8 @@ function renderDraftSteps(): void {
     delBtn.title = index === editingStepIndex ? "編輯中，無法刪除" : "移除此步驟";
     delBtn.disabled = index === editingStepIndex;
     delBtn.addEventListener("click", () => {
+      const stepTitle = step.requestName || step.api;
+      if (!confirmDelete(`確定要刪除步驟「${stepTitle}」嗎？`)) return;
       draftSteps.splice(index, 1);
       if (editingStepIndex === index) {
         editingStepIndex = -1;
@@ -1025,13 +1279,26 @@ function renderSavedWorkflows(): void {
     savedWorkflowsEl.appendChild(empty);
     return;
   }
-  savedWorkflows.forEach((workflow) => {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "workflow-chip";
-    chip.textContent = workflow.name;
-    chip.title = workflow.steps.map((step) => step.api).join(", ");
-    chip.addEventListener("click", () => {
+  savedWorkflows.forEach((workflow, index) => {
+    const card = document.createElement("div");
+    card.className = "workflow-card";
+
+    const nameEl = document.createElement("div");
+    nameEl.className = "workflow-card-name";
+    nameEl.textContent = workflow.name;
+    nameEl.title = workflow.steps.map((step) => step.api).join(", ");
+
+    const stepsEl = document.createElement("div");
+    stepsEl.className = "workflow-card-steps";
+    stepsEl.textContent = `${workflow.steps.length} 步`;
+
+    const actions = document.createElement("div");
+    actions.className = "workflow-card-actions";
+
+    const loadBtn = document.createElement("button");
+    loadBtn.type = "button";
+    loadBtn.textContent = "載入";
+    loadBtn.addEventListener("click", () => {
       draftSteps = workflow.steps.map((step) => ({
         ...step,
         params: [...step.params],
@@ -1043,7 +1310,25 @@ function renderSavedWorkflows(): void {
       setToast(`已載入流程：${workflow.name}`, "ok");
       chatInputEl.focus();
     });
-    savedWorkflowsEl.appendChild(chip);
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "workflow-card-delete";
+    deleteBtn.textContent = "刪除";
+    deleteBtn.addEventListener("click", async () => {
+      if (!confirmDelete(`確定要刪除已儲存流程「${workflow.name}」嗎？`)) return;
+      savedWorkflows.splice(index, 1);
+      renderSavedWorkflows();
+      await saveMessages();
+      setToast(`已刪除流程：${workflow.name}`, "ok");
+    });
+
+    actions.appendChild(loadBtn);
+    actions.appendChild(deleteBtn);
+    card.appendChild(nameEl);
+    card.appendChild(stepsEl);
+    card.appendChild(actions);
+    savedWorkflowsEl.appendChild(card);
   });
 }
 
@@ -1059,8 +1344,7 @@ function renderSavedApis(): void {
   customApiSpecs.forEach((spec, index) => {
     const card = document.createElement("div");
     card.className = "saved-api-card";
-    if (index === editingApiIndex) card.classList.add("editing");
-    else if (index === selectedApiIndex) card.classList.add("selected");
+    if (index === pinnedSavedApiIndex) card.classList.add("selected");
 
     const info = document.createElement("div");
     info.className = "saved-api-info";
@@ -1082,33 +1366,13 @@ function renderSavedApis(): void {
     const selectBtn = document.createElement("button");
     selectBtn.type = "button";
     selectBtn.textContent = "選擇";
-    if (index === selectedApiIndex) selectBtn.classList.add("active");
+    if (index === pinnedSavedApiIndex) selectBtn.classList.add("active");
     selectBtn.addEventListener("click", () => {
-      selectedApiIndex = index;
-      renderSavedApis();
-      renderApiDetail({ ...spec });
-    });
-
-    const editBtn = document.createElement("button");
-    editBtn.type = "button";
-    editBtn.textContent = "編輯";
-    if (index === editingApiIndex) editBtn.classList.add("active");
-    editBtn.addEventListener("click", () => {
-      editingApiIndex = index;
       selectedApiIndex = -1;
+      pinnedSavedApiIndex = index;
+      pinnedDetailSpec = { ...spec, params: [...(spec.params ?? [])], headers: { ...(spec.headers ?? {}) } };
       renderSavedApis();
-      addManualApiButton.textContent = "儲存";
-      manualApiActionsEl.classList.add("hidden");
-      manualApiActionsEl.replaceChildren();
-      setManualApiOpen(true);
-      manualApiNameEl.value = spec.requestName ?? "";
-      manualApiMethodEl.value = spec.method ?? "GET";
-      manualApiPathEl.value = spec.path ?? spec.api ?? "";
-      renderManualHeaderRowsFromObject(spec.headers ?? {});
-      manualApiBodyEl.value = spec.bodyTemplate ?? "";
-      manualApiPurposeEl.value = spec.purpose ?? "";
-      updateManualFormActions();
-      setToast(`正在編輯：${spec.requestName ?? spec.api}`, "normal");
+      renderApiCandidates();
     });
 
     const deleteBtn = document.createElement("button");
@@ -1117,16 +1381,22 @@ function renderSavedApis(): void {
     deleteBtn.textContent = "✕";
     deleteBtn.title = "刪除此 API";
     deleteBtn.addEventListener("click", async () => {
+      const apiTitle = spec.requestName || spec.api;
+      if (!confirmDelete(`確定要刪除已儲存 API「${apiTitle}」嗎？`)) return;
       customApiSpecs.splice(index, 1);
       if (editingApiIndex === index) editingApiIndex = -1;
-      if (selectedApiIndex === index) selectedApiIndex = -1;
+      if (pinnedSavedApiIndex === index) {
+        pinnedSavedApiIndex = -1;
+        pinnedDetailSpec = null;
+      } else if (pinnedSavedApiIndex > index) {
+        pinnedSavedApiIndex--;
+      }
       renderSavedApis();
       renderApiCandidates();
       await saveMessages();
     });
 
     actions.appendChild(selectBtn);
-    actions.appendChild(editBtn);
     actions.appendChild(deleteBtn);
     card.appendChild(info);
     card.appendChild(actions);
@@ -1134,9 +1404,14 @@ function renderSavedApis(): void {
   });
 }
 
+// ===== OAuth、串流訊息、聊天渲染 =====
 function maskToken(token: string): string {
   if (token.length <= 14) return token;
   return `${token.slice(0, 10)}...${token.slice(-4)}`;
+}
+
+function confirmDelete(message: string): boolean {
+  return globalThis.confirm(message);
 }
 
 function createOAuthState(): string {
@@ -1246,6 +1521,28 @@ function stripThinkingText(text: string): string {
     .replace(/^\s*(思考|thinking)\s*[:：].*$/gim, "");
 }
 
+/** Parse one SSE block (between \\n\\n). Returns event type (lowercase) or null if omitted. */
+function parseSseBlock(block: string): { eventType: string | null; payloadText: string } {
+  let eventType: string | null = null;
+  const dataParts: string[] = [];
+  for (const raw of block.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line.startsWith("event:")) {
+      eventType = line.slice(6).trim().toLowerCase();
+    } else if (line.startsWith("data:")) {
+      dataParts.push(line.slice(5).trim());
+    }
+  }
+  return { eventType, payloadText: dataParts.join("\n") };
+}
+
+/** Only `event: delta` contributes to the chat; other `event:` types are skipped. Blocks without `event:` still emit (legacy streams that only send `data:`). */
+function shouldEmitSseDelta(eventType: string | null): boolean {
+  if (eventType === null) return true;
+  return eventType === "delta";
+}
+
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
@@ -1335,12 +1632,8 @@ async function callAgentChatApiStream(message: string, onDelta: (chunk: string) 
       const events = buffer.split("\n\n");
       buffer = events.pop() || "";
       for (const event of events) {
-        const lines = event
-          .split("\n")
-          .map((line) => line.trim())
-          .filter((line) => line.startsWith("data:"))
-          .map((line) => line.slice(5).trim());
-        const payloadText = lines.join("\n");
+        const { eventType, payloadText } = parseSseBlock(event);
+        if (!shouldEmitSseDelta(eventType)) continue;
         if (!payloadText || payloadText === "[DONE]") continue;
         let deltaText = "";
         try {
@@ -1362,17 +1655,21 @@ async function callAgentChatApiStream(message: string, onDelta: (chunk: string) 
   }
 
   if (contentType.includes("text/event-stream")) {
-    const rest = buffer.trim();
-    if (rest && rest !== "[DONE]") {
-      const cleaned = rest.startsWith("data:") ? rest.replace(/^data:\s*/gm, "").trim() : rest;
-      let deltaText = "";
-      try {
-        deltaText = extractTextFromPayload(JSON.parse(cleaned));
-      } catch {
-        deltaText = cleaned;
-      }
-      deltaText = stripThinkingText(deltaText);
-      if (deltaText) {
+    const tail = buffer.trim();
+    if (tail && tail !== "[DONE]") {
+      const tailEvents = tail.split("\n\n").filter(Boolean);
+      for (const ev of tailEvents) {
+        const { eventType, payloadText } = parseSseBlock(ev);
+        if (!shouldEmitSseDelta(eventType)) continue;
+        if (!payloadText || payloadText === "[DONE]") continue;
+        let deltaText = "";
+        try {
+          deltaText = extractTextFromPayload(JSON.parse(payloadText));
+        } catch {
+          deltaText = payloadText;
+        }
+        deltaText = stripThinkingText(deltaText);
+        if (!deltaText) continue;
         accumulated += deltaText;
         onDelta(deltaText);
       }
@@ -1540,6 +1837,7 @@ async function loadMessages(): Promise<void> {
   refreshApiCandidatesFromLatestAssistant();
   renderDraftSteps();
   renderSavedWorkflows();
+  renderSavedApis();
   try {
     if (typeof saved[EXEC_RESULTS_KEY] === "string" && saved[EXEC_RESULTS_KEY]) {
       const parsed = JSON.parse(saved[EXEC_RESULTS_KEY] as string) as ExecResult[];
@@ -1747,6 +2045,7 @@ async function authorizeNow(): Promise<void> {
   }
 }
 
+// ===== 執行流程與結果渲染 =====
 const STEP_LETTERS = "abcdefghijklmnopqrstuvwxyz";
 
 function renderExecResults(): void {
@@ -2078,6 +2377,7 @@ async function sendChatMessage(rawMessage: string, useSkill: boolean): Promise<v
   await saveMessages();
 }
 
+// ===== 事件綁定與初始化 =====
 chatFormEl.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (isAuthExpired()) {
@@ -2086,35 +2386,11 @@ chatFormEl.addEventListener("submit", async (event) => {
   }
   const value = chatInputEl.value.trim();
   if (!value) return;
-  if (shouldPromptSkillConfirm(value)) {
-    pendingUserMessage = value;
-    toggleSkillConfirm(true);
-    setToast("偵測到可用 skill，請先選擇是否使用。", "normal");
-    return;
-  }
-  await sendChatMessage(value, false);
-});
-
-skillUseButton.addEventListener("click", async () => {
-  if (!pendingUserMessage.trim()) return;
-  const value = pendingUserMessage;
-  pendingUserMessage = "";
-  toggleSkillConfirm(false);
-  await sendChatMessage(value, true);
-});
-
-skillSkipButton.addEventListener("click", async () => {
-  if (!pendingUserMessage.trim()) return;
-  const value = pendingUserMessage;
-  pendingUserMessage = "";
-  toggleSkillConfirm(false);
   await sendChatMessage(value, false);
 });
 
 clearChatButton.addEventListener("click", () => {
   messages = [];
-  pendingUserMessage = "";
-  toggleSkillConfirm(false);
   renderMessages();
   void saveMessages();
 });
@@ -2155,6 +2431,15 @@ clearExecutionResultButton.addEventListener("click", async () => {
   await saveMessages();
 });
 
+cancelApiDetailButton.addEventListener("click", () => {
+  selectedApiIndex = -1;
+  pinnedDetailSpec = null;
+  pinnedSavedApiIndex = -1;
+  resetApiDetail();
+  renderApiCandidates();
+  renderSavedApis();
+});
+
 addStepButton.addEventListener("click", () => {
   const spec = editedDetailSpec ?? getAllApiCandidates()[selectedApiIndex];
   if (!spec) {
@@ -2183,6 +2468,64 @@ addStepButton.addEventListener("click", () => {
     setToast(`已加入步驟：${stepData.requestName || stepData.api}`, "ok");
   }
   renderDraftSteps();
+});
+
+// ===== API 設定動作（加入步驟 / 儲存 / 更新）與確認對話 =====
+function getCurrentDetailSpec(): ApiSpec | null {
+  const src = editedDetailSpec ?? (selectedApiIndex >= 0 ? getAllApiCandidates()[selectedApiIndex] : pinnedDetailSpec);
+  if (!src) return null;
+  return {
+    ...src,
+    api: src.api || src.path || "",
+    path: src.path,
+    requestName: src.requestName,
+    method: src.method,
+    headers: src.headers ? { ...src.headers } : {},
+    bodyTemplate: src.bodyTemplate,
+    bearerToken: src.bearerToken,
+    purpose: src.purpose || "",
+    params: [...(src.params || [])],
+  };
+}
+
+saveDetailApiButton.addEventListener("click", async () => {
+  const spec = getCurrentDetailSpec();
+  if (!spec) {
+    setToast("請先選擇一個 API。", "error");
+    return;
+  }
+  const baseName = (spec.requestName || spec.api || "CustomApi").trim();
+  const isDup = customApiSpecs.some(
+    (s) => (s.requestName || s.api) === baseName && (s.path || s.api) === (spec.path || spec.api),
+  );
+  if (isDup) {
+    spec.requestName = `${baseName}-copy`;
+    spec.api = spec.path || spec.requestName;
+  }
+  customApiSpecs = [spec, ...customApiSpecs].slice(0, 50);
+  selectedApiIndex = -1;
+  pinnedSavedApiIndex = 0;
+  pinnedDetailSpec = spec;
+  renderSavedApis();
+  renderApiCandidates();
+  setSavedApisOpen(true);
+  await saveMessages();
+  setToast(isDup ? `已另存為「${spec.requestName}」` : `已儲存 API：${baseName}`, "ok");
+});
+
+updateDetailApiButton.addEventListener("click", async () => {
+  const spec = getCurrentDetailSpec();
+  const targetIndex = pinnedSavedApiIndex;
+  if (!spec || targetIndex < 0) {
+    setToast("找不到對應的已儲存 API 可更新。", "error");
+    return;
+  }
+  customApiSpecs[targetIndex] = spec;
+  pinnedDetailSpec = spec;
+  renderSavedApis();
+  renderApiCandidates();
+  await saveMessages();
+  setToast(`已更新已儲存 API：${spec.requestName || spec.api}`, "ok");
 });
 
 function clearFieldError(el: HTMLElement): void {
@@ -2520,6 +2863,8 @@ saveWorkflowButton.addEventListener("click", async () => {
 });
 
 clearDraftButton.addEventListener("click", () => {
+  if (!draftSteps.length) return;
+  if (!confirmDelete("確定要清空目前流程草稿嗎？")) return;
   draftSteps = [];
   renderDraftSteps();
   setToast("已清空流程草稿。", "normal");

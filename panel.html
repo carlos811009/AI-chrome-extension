@@ -28,13 +28,6 @@
 
           <form id="chatForm" class="chat-input-wrap">
             <textarea id="chatInput" placeholder="例如：業務離職了，我要移除他的身份" required></textarea>
-            <div id="skillConfirm" class="skill-confirm hidden">
-              <div class="skill-confirm-text">偵測到可能可用的 skill，要優先使用 skill 回答嗎？</div>
-              <div class="skill-confirm-actions">
-                <button id="skillUse" type="button">使用 skill</button>
-                <button id="skillSkip" type="button">不使用 skill</button>
-              </div>
-            </div>
             <div class="chat-actions">
               <button id="sendMessage" type="submit">送出</button>
               <button id="clearChat" type="button">清空對話</button>
@@ -82,13 +75,23 @@
               <div id="manualApiActions" class="manual-api-actions hidden"></div>
             </div>
           </div>
-          <div class="api-zone-label">API 清單與詳細資訊</div>
+          <div class="api-zone-label">API 候選清單</div>
           <div id="apiCandidates" class="api-candidates"></div>
-          <div class="api-detail">
-            <div id="apiDetailName" class="api-detail-name">尚未選擇 API</div>
-            <div id="apiDetailPurpose" class="api-detail-purpose">用途：-</div>
+          <div class="api-detail" id="apiDetailSection">
+            <div class="api-detail-header">
+              <div class="api-detail-header-left">
+                <span class="api-detail-badge">API 設定</span>
+                <span id="apiDetailName" class="api-detail-name">尚未選擇 API</span>
+              </div>
+              <button id="cancelApiDetail" type="button" class="api-detail-cancel" title="取消選擇">✕</button>
+            </div>
+            <div id="apiDetailPurpose" class="api-detail-purpose"></div>
             <div id="apiDetailParams" class="api-detail-params"></div>
-            <button id="addStep" type="button" class="create-workflow">加入流程步驟</button>
+            <div id="apiDetailActions" class="manual-api-actions hidden">
+              <button id="addStep" type="button" class="create-workflow">加入流程步驟</button>
+              <button id="saveDetailApi" type="button" class="pending-api-save">新增到已儲存 API</button>
+              <button id="updateDetailApi" type="button" class="pending-api-step">更新已儲存 API</button>
+            </div>
           </div>
           <div class="draft-steps-section">
             <div class="workflow-subtitle">流程草稿（依序執行）</div>

@@ -17,9 +17,6 @@
   const chatMessagesEl = document.getElementById("chatMessages");
   const chatFormEl = document.getElementById("chatForm");
   const chatInputEl = document.getElementById("chatInput");
-  const skillConfirmEl = document.getElementById("skillConfirm");
-  const skillUseButton = document.getElementById("skillUse");
-  const skillSkipButton = document.getElementById("skillSkip");
   const sendMessageButton = document.getElementById("sendMessage");
   const clearChatButton = document.getElementById("clearChat");
   const authStatusEl = document.getElementById("authStatus");
@@ -46,7 +43,11 @@
   const apiDetailNameEl = document.getElementById("apiDetailName");
   const apiDetailPurposeEl = document.getElementById("apiDetailPurpose");
   const apiDetailParamsEl = document.getElementById("apiDetailParams");
+  const cancelApiDetailButton = document.getElementById("cancelApiDetail");
+  const apiDetailActionsEl = document.getElementById("apiDetailActions");
   const addStepButton = document.getElementById("addStep");
+  const saveDetailApiButton = document.getElementById("saveDetailApi");
+  const updateDetailApiButton = document.getElementById("updateDetailApi");
   const draftStepsEl = document.getElementById("draftSteps");
   const runWorkflowButton = document.getElementById("runWorkflow");
   const saveWorkflowButton = document.getElementById("saveWorkflow");
@@ -76,6 +77,8 @@
   let savedWorkflows = [];
   let draftSteps = [];
   let selectedApiIndex = -1;
+  let pinnedDetailSpec = null;
+  let pinnedSavedApiIndex = -1;
   let chatPanelOpen = true;
   let workflowPanelOpen = true;
   let curlParserOpen = false;
@@ -85,17 +88,12 @@
   let editedDetailSpec = null;
   let editingStepIndex = -1;
   let editingApiIndex = -1;
-  let pendingUserMessage = "";
   let currentWorkflowName = "";
   const fallbackStorage = /* @__PURE__ */ new Map();
   const extensionChrome = typeof chrome !== "undefined" ? chrome : void 0;
   function isAuthStateValid(state) {
     return Boolean(
-      state.firebaseIdToken &&
-      state.googleAccessToken &&
-      state.expiresAt &&
-      Number.isFinite(state.expiresAt) &&
-      Date.now() < state.expiresAt,
+      state.firebaseIdToken && state.googleAccessToken && state.expiresAt && Number.isFinite(state.expiresAt) && Date.now() < state.expiresAt
     );
   }
   function getCurrentAuthState() {
@@ -104,7 +102,7 @@
       firebaseIdToken,
       googleAccessToken,
       expiresAt: authExpiresAt,
-      accountEmail,
+      accountEmail
     };
   }
   function clearAuthStateInMemory() {
@@ -122,10 +120,9 @@
   function notifyAuthExpired() {
     clearAuthStateInMemory();
     setChatEnabled(false);
-    setAuthStatus(
-      "\u6388\u6B0A\u5DF2\u5931\u6548\uFF0C\u8ACB\u91CD\u65B0\u9EDE\u64CA\u300CGoogle \u6388\u6B0A\u300D\u767B\u5165\u3002",
-      "error",
-    );
+    const msg = "\u6388\u6B0A\u5DF2\u5931\u6548\uFF0C\u8ACB\u91CD\u65B0\u9EDE\u64CA\u300CGoogle \u6388\u6B0A\u300D\u767B\u5165\u3002";
+    setAuthStatus(msg, "error");
+    setToast(msg, "error", 5e3);
     authorizeGoogleButton.classList.add("auth-expired-pulse");
   }
   function setAuthStatus(text, status = "normal") {
@@ -141,28 +138,24 @@
         btn.textContent = "\u8907\u88FD";
       }, 1500);
     };
-    const fail = () =>
-      setToast("\u8907\u88FD\u5931\u6557\uFF0C\u8ACB\u624B\u52D5\u9078\u53D6\u6587\u5B57\u3002", "error");
+    const fail = () => setToast("\u8907\u88FD\u5931\u6557\uFF0C\u8ACB\u624B\u52D5\u9078\u53D6\u6587\u5B57\u3002", "error");
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard
-        .writeText(text)
-        .then(succeed)
-        .catch(() => {
-          try {
-            const ta = document.createElement("textarea");
-            ta.value = text;
-            ta.style.position = "fixed";
-            ta.style.opacity = "0";
-            document.body.appendChild(ta);
-            ta.focus();
-            ta.select();
-            const ok = document.execCommand("copy");
-            document.body.removeChild(ta);
-            ok ? succeed() : fail();
-          } catch {
-            fail();
-          }
-        });
+      navigator.clipboard.writeText(text).then(succeed).catch(() => {
+        try {
+          const ta = document.createElement("textarea");
+          ta.value = text;
+          ta.style.position = "fixed";
+          ta.style.opacity = "0";
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          const ok = document.execCommand("copy");
+          document.body.removeChild(ta);
+          ok ? succeed() : fail();
+        } catch {
+          fail();
+        }
+      });
     } else {
       try {
         const ta = document.createElement("textarea");
@@ -199,9 +192,7 @@
     oauthInfoEl.textContent = text;
   }
   function updateWorkflowToggleLabel() {
-    toggleWorkflowsButton.textContent = workflowPanelOpen
-      ? "\u5E38\u7528\u5DE5\u4F5C\u6D41\u7A0B \u25BE"
-      : "\u5E38\u7528\u5DE5\u4F5C\u6D41\u7A0B \u25B8";
+    toggleWorkflowsButton.textContent = workflowPanelOpen ? "\u5E38\u7528\u5DE5\u4F5C\u6D41\u7A0B \u25BE" : "\u5E38\u7528\u5DE5\u4F5C\u6D41\u7A0B \u25B8";
   }
   function setCurlParserOpen(open) {
     curlParserOpen = open;
@@ -216,16 +207,12 @@
   function setSavedWorkflowsOpen(open) {
     savedWorkflowsOpen = open;
     savedWorkflowsPanelEl.classList.toggle("collapsed", !open);
-    toggleSavedWorkflowsButton.textContent = open
-      ? "\u5DF2\u5132\u5B58\u6D41\u7A0B \u25BE"
-      : "\u5DF2\u5132\u5B58\u6D41\u7A0B \u25B8";
+    toggleSavedWorkflowsButton.textContent = open ? "\u5DF2\u5132\u5B58\u6D41\u7A0B \u25BE" : "\u5DF2\u5132\u5B58\u6D41\u7A0B \u25B8";
   }
   function setSavedApisOpen(open) {
     savedApisOpen = open;
     savedApisPanelEl.classList.toggle("collapsed", !open);
-    toggleSavedApisButton.textContent = open
-      ? "\u5DF2\u5132\u5B58\u7684 API \u25BE"
-      : "\u5DF2\u5132\u5B58\u7684 API \u25B8";
+    toggleSavedApisButton.textContent = open ? "\u5DF2\u5132\u5B58\u7684 API \u25BE" : "\u5DF2\u5132\u5B58\u7684 API \u25B8";
   }
   function setChatPanelOpen(open) {
     chatPanelOpen = open;
@@ -240,18 +227,7 @@
   function setChatEnabled(enabled) {
     chatInputEl.disabled = !enabled;
     sendMessageButton.disabled = !enabled;
-    skillUseButton.disabled = !enabled;
-    skillSkipButton.disabled = !enabled;
-    chatInputEl.placeholder = enabled
-      ? "\u4F8B\u5982\uFF1A\u696D\u52D9\u96E2\u8077\u4E86\uFF0C\u6211\u8981\u79FB\u9664\u4ED6\u7684 sales \u8207 lineUser \u8EAB\u4EFD"
-      : "\u8ACB\u5148\u5B8C\u6210 Google \u6388\u6B0A\u5F8C\uFF0C\u624D\u53EF\u4F7F\u7528\u5C0D\u8A71\u7A97";
-  }
-  function toggleSkillConfirm(show) {
-    skillConfirmEl.classList.toggle("hidden", !show);
-  }
-  function shouldPromptSkillConfirm(message) {
-    if (getAllApiCandidates().length > 0) return true;
-    return /(api|權限|流程|查詢|刪除|新增|更新)/i.test(message);
+    chatInputEl.placeholder = enabled ? "\u4F8B\u5982\uFF1A\u696D\u52D9\u96E2\u8077\u4E86\uFF0C\u6211\u8981\u79FB\u9664\u4ED6\u7684 sales \u8207 lineUser \u8EAB\u4EFD" : "\u8ACB\u5148\u5B8C\u6210 Google \u6388\u6B0A\u5F8C\uFF0C\u624D\u53EF\u4F7F\u7528\u5C0D\u8A71\u7A97";
   }
   function buildMessageWithSkillDirective(rawMessage, useSkill) {
     if (!useSkill) return rawMessage;
@@ -266,10 +242,7 @@
       return value.map((v) => String(v).trim()).filter(Boolean);
     }
     if (typeof value === "string") {
-      return value
-        .split(/[,\n]/)
-        .map((v) => v.trim())
-        .filter(Boolean);
+      return value.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
     }
     return [];
   }
@@ -283,7 +256,7 @@
     "X-API-Key",
     "User-Agent",
     "X-Request-Id",
-    "Cookie",
+    "Cookie"
   ];
   function buildHeaderKeySelect(selectedKey) {
     const select = document.createElement("select");
@@ -381,10 +354,7 @@
     return out;
   }
   function extractCurlUrl(text) {
-    const normalized = text
-      .replace(/\\\r?\n/g, " ")
-      .replace(/\r/g, " ")
-      .trim();
+    const normalized = text.replace(/\\\r?\n/g, " ").replace(/\r/g, " ").trim();
     let m = normalized.match(/\-\-(?:location|url)\s+['"](https?:\/\/[^'"]+)['"]/i);
     if (m?.[1]) return m[1].trim();
     m = normalized.match(/(?:^|\s)\-L\s+['"](https?:\/\/[^'"]+)['"]/i);
@@ -422,7 +392,12 @@
     try {
       const qIdx = path.indexOf("?");
       if (qIdx >= 0) {
-        fromQuery = Array.from(new URLSearchParams(path.slice(qIdx + 1)).keys());
+        const sp = new URLSearchParams(path.slice(qIdx + 1));
+        const qKeys = [];
+        sp.forEach((_v, k) => {
+          qKeys.push(k);
+        });
+        fromQuery = Array.from(new Set(qKeys));
       }
     } catch {
       fromQuery = [];
@@ -469,48 +444,152 @@
       url: rawUrl,
       headers,
       body,
-      bearerToken,
+      bearerToken
     };
+  }
+  function collectCurlSnippetsFromText(text) {
+    const out = [];
+    const seen = /* @__PURE__ */ new Set();
+    const add = (raw) => {
+      const t = raw.trim();
+      if (t.length < 10 || !/^curl\b/i.test(t)) return;
+      if (seen.has(t)) return;
+      seen.add(t);
+      out.push(t);
+    };
+    for (const m of text.matchAll(/```(?:[a-zA-Z0-9_-]+)?\s*([\s\S]*?)```/g)) {
+      const inner = m[1] ?? "";
+      for (const piece of inner.split(/(?=^\s*curl\s)/im)) {
+        if (/^\s*curl\s/im.test(piece)) add(piece);
+      }
+    }
+    const unfenced = text.replace(/```[\s\S]*?```/g, "\n");
+    let search = 0;
+    while (search < unfenced.length) {
+      const tail = unfenced.slice(search);
+      const rel = tail.search(/\bcurl\s/i);
+      if (rel < 0) break;
+      const idx = search + rel;
+      const atLineStart = idx === 0 || unfenced[idx - 1] === "\n";
+      if (!atLineStart) {
+        search = idx + 4;
+        continue;
+      }
+      const rest = unfenced.slice(idx + 4);
+      const nextRel = rest.search(/\n\s*curl\s/i);
+      const end = nextRel < 0 ? unfenced.length : idx + 4 + nextRel;
+      add(unfenced.slice(idx, end));
+      search = end;
+    }
+    return out;
+  }
+  function apiSpecFromParsedCurl(p) {
+    const path = p.url.trim();
+    const headers = {};
+    for (const [k, v] of Object.entries(p.headers)) {
+      if (k.toLowerCase() === "authorization") continue;
+      headers[k] = v;
+    }
+    return {
+      api: path,
+      path,
+      method: p.method,
+      headers,
+      bodyTemplate: p.body.trim() ? p.body : void 0,
+      bearerToken: p.bearerToken || void 0,
+      purpose: "\u5F9E\u5C0D\u8A71\u4E2D\u7684 curl \u5075\u6E2C",
+      params: inferParamsFromPathAndBody(path, p.body)
+    };
+  }
+  function preferRicherPath(a, b) {
+    const x = (a ?? "").trim();
+    const y = (b ?? "").trim();
+    if (!x) return y || void 0;
+    if (!y) return x || void 0;
+    if (/^https?:\/\//i.test(x) && !/^https?:\/\//i.test(y)) return x;
+    if (/^https?:\/\//i.test(y) && !/^https?:\/\//i.test(x)) return y;
+    return x.length >= y.length ? x : y;
+  }
+  function endpointKey(raw) {
+    const t = raw.trim();
+    if (!t) return "";
+    try {
+      if (/^https?:\/\//i.test(t)) {
+        const u = new URL(t);
+        return (u.pathname.replace(/\/+$/, "") || "/") + u.search;
+      }
+    } catch {
+    }
+    return t.replace(/^\/+/, "");
+  }
+  function pathTail2(pathKey) {
+    return pathKey.split("/").filter(Boolean).slice(-2).join("/");
+  }
+  function findExistingMergeKey(map, next) {
+    const nk = endpointKey(next.path || next.api);
+    const nTail = pathTail2(nk);
+    if (!nTail) return void 0;
+    for (const [mapKey, spec] of map) {
+      const ek = endpointKey(spec.path || spec.api);
+      if (pathTail2(ek) === nTail) return mapKey;
+    }
+    return void 0;
   }
   function getAllApiCandidates() {
     return [...apiCandidates];
   }
+  function refreshApiDetailActions(spec) {
+    const hasSpec = !!spec;
+    const savedIndex = pinnedSavedApiIndex;
+    addStepButton.disabled = !hasSpec;
+    saveDetailApiButton.disabled = !hasSpec;
+    updateDetailApiButton.disabled = !hasSpec || savedIndex < 0;
+    updateDetailApiButton.style.display = savedIndex >= 0 ? "block" : "none";
+    apiDetailActionsEl.classList.toggle("hidden", !hasSpec);
+  }
   function extractApiCandidatesFromText(text) {
     const specs = /* @__PURE__ */ new Map();
     const upsert = (next) => {
-      const key = next.path || next.api;
+      const rawKey = (next.path || next.api).trim();
+      if (!rawKey) return;
+      const existingKey = findExistingMergeKey(specs, next);
+      const nk = endpointKey(rawKey);
+      const key = existingKey ?? (nk || rawKey);
       const current = specs.get(key);
       if (!current) {
         specs.set(key, {
           ...next,
-          params: [...new Set(next.params.map((p) => p.trim()).filter(Boolean))],
+          params: [...new Set(next.params.map((p) => p.trim()).filter(Boolean))]
         });
         return;
       }
-      const mergedParams = Array.from(
-        new Set([...current.params, ...next.params].map((p) => p.trim()).filter(Boolean)),
-      );
+      const mergedParams = Array.from(new Set([...current.params, ...next.params].map((p) => p.trim()).filter(Boolean)));
+      const mergedPath = preferRicherPath(current.path, next.path);
+      const mergedApi = preferRicherPath(current.api, next.api);
       specs.set(key, {
         ...current,
         ...next,
-        api: current.api || next.api,
-        path: current.path || next.path,
+        api: mergedApi || current.api || next.api,
+        path: mergedPath || current.path || next.path,
         requestName: current.requestName || next.requestName,
+        method: next.method || current.method,
+        bodyTemplate: next.bodyTemplate || current.bodyTemplate,
+        headers: { ...current.headers || {}, ...next.headers || {} },
         purpose: current.purpose !== "\u5F85\u88DC\u5145\u76EE\u7684" ? current.purpose : next.purpose,
-        params: mergedParams,
+        params: mergedParams
       });
     };
+    for (const snippet of collectCurlSnippetsFromText(text)) {
+      const parsed = parseCurlCommand(snippet);
+      if (parsed) upsert(apiSpecFromParsedCurl(parsed));
+    }
     const jsonBlocks = Array.from(text.matchAll(/```json([\s\S]*?)```/g));
     for (const block of jsonBlocks) {
       const raw = block[1]?.trim();
       if (!raw) continue;
       try {
         const parsed = JSON.parse(raw);
-        const list = Array.isArray(parsed)
-          ? parsed
-          : parsed && typeof parsed === "object" && Array.isArray(parsed.apis)
-            ? parsed.apis
-            : [];
+        const list = Array.isArray(parsed) ? parsed : parsed && typeof parsed === "object" && Array.isArray(parsed.apis) ? parsed.apis : [];
         for (const item of list) {
           if (!item || typeof item !== "object") continue;
           const obj = item;
@@ -520,9 +599,38 @@
           const params = normalizeParams(obj.params || obj.requiredParams || obj.arguments);
           const path = String(obj.path || obj.endpoint || "").trim() || void 0;
           const requestName = String(obj.requestName || obj.request || "").trim() || void 0;
-          upsert({ api: path || api, path, requestName, purpose, params });
+          const mRaw = obj.method ?? obj.httpMethod ?? obj.verb;
+          const method = typeof mRaw === "string" && mRaw.trim() ? mRaw.trim().toUpperCase() : void 0;
+          let bodyTemplate;
+          if (typeof obj.body === "string") bodyTemplate = obj.body;
+          else if (typeof obj.bodyTemplate === "string") bodyTemplate = obj.bodyTemplate;
+          else if (obj.body && typeof obj.body === "object" && !Array.isArray(obj.body)) {
+            try {
+              bodyTemplate = JSON.stringify(obj.body, null, 2);
+            } catch {
+              bodyTemplate = void 0;
+            }
+          }
+          let headers;
+          if (obj.headers && typeof obj.headers === "object" && !Array.isArray(obj.headers)) {
+            headers = {};
+            for (const [k, v] of Object.entries(obj.headers)) {
+              if (typeof v === "string") headers[k] = v;
+            }
+          }
+          upsert({
+            api: path || api,
+            path,
+            requestName,
+            purpose,
+            params,
+            ...method ? { method } : {},
+            ...bodyTemplate ? { bodyTemplate } : {},
+            ...headers && Object.keys(headers).length ? { headers } : {}
+          });
         }
-      } catch {}
+      } catch {
+      }
     }
     const requestMatches = Array.from(text.matchAll(/([A-Za-z][A-Za-z0-9]+Request)\s*\{([\s\S]{0,220}?)\}/g));
     for (const match of requestMatches) {
@@ -533,17 +641,15 @@
       const pathCandidates = Array.from(nearbyText.matchAll(/`([A-Za-z][\w-]*(?:\/[A-Za-z][\w-]*)+)`/g));
       const path = pathCandidates.length ? pathCandidates[pathCandidates.length - 1][1] : "";
       const bulletFields = Array.from(
-        text.slice(match.index || 0, (match.index || 0) + 400).matchAll(/^\s*[-*]\s*`?([A-Za-z_][A-Za-z0-9_]*)`?/gm),
+        text.slice(match.index || 0, (match.index || 0) + 400).matchAll(/^\s*[-*]\s*`?([A-Za-z_][A-Za-z0-9_]*)`?/gm)
       ).map((m) => m[1]);
-      const purpose = path
-        ? `\u5C0D\u61C9\u8ACB\u6C42\uFF1A${requestName}`
-        : `\u8ACB\u6C42\u6A21\u578B\uFF1A${requestName}`;
+      const purpose = path ? `\u5C0D\u61C9\u8ACB\u6C42\uFF1A${requestName}` : `\u8ACB\u6C42\u6A21\u578B\uFF1A${requestName}`;
       upsert({
         api: path || requestName,
         path: path || void 0,
         requestName,
         purpose,
-        params: [...typedFields, ...bulletFields],
+        params: [...typedFields, ...bulletFields]
       });
     }
     if (!specs.size) {
@@ -575,19 +681,66 @@
     wrap.appendChild(body);
     return { wrap, body };
   }
+  function resetApiDetail() {
+    apiDetailNameEl.textContent = "\u5C1A\u672A\u9078\u64C7 API";
+    apiDetailPurposeEl.replaceChildren();
+    apiDetailParamsEl.replaceChildren();
+    addStepButton.textContent = "\u52A0\u5165\u6D41\u7A0B\u6B65\u9A5F";
+    addStepButton.classList.remove("updating");
+    editedDetailSpec = null;
+    editingStepIndex = -1;
+    refreshApiDetailActions(null);
+    renderDraftSteps();
+  }
   function renderApiDetail(spec) {
     if (!spec) {
-      apiDetailNameEl.textContent = "\u5C1A\u672A\u9078\u64C7 API";
-      apiDetailPurposeEl.textContent = "\u7528\u9014\uFF1A-";
-      apiDetailParamsEl.replaceChildren();
-      editedDetailSpec = null;
+      resetApiDetail();
       return;
     }
-    editedDetailSpec = { ...spec, params: [...(spec.params ?? [])], headers: { ...(spec.headers ?? {}) } };
+    editedDetailSpec = { ...spec, params: [...spec.params ?? []], headers: { ...spec.headers ?? {} } };
     apiDetailNameEl.textContent = spec.requestName ?? spec.api;
-    const purposeText = (spec.purpose ?? "").trim();
-    apiDetailPurposeEl.textContent = purposeText ? `\u7528\u9014\uFF1A${purposeText}` : "";
-    apiDetailPurposeEl.style.display = purposeText ? "" : "none";
+    apiDetailPurposeEl.replaceChildren();
+    const nameWrap = document.createElement("div");
+    nameWrap.className = "api-detail-purpose-edit";
+    const nameLabel = document.createElement("label");
+    nameLabel.className = "api-detail-purpose-label";
+    nameLabel.setAttribute("for", "apiDetailNameInput");
+    nameLabel.textContent = "API \u540D\u7A31";
+    const nameInput = document.createElement("input");
+    nameInput.id = "apiDetailNameInput";
+    nameInput.type = "text";
+    nameInput.className = "api-detail-purpose-input";
+    nameInput.placeholder = "\u986F\u793A\u540D\u7A31\uFF08\u4F8B\u5982\uFF1AMedSalesRollbackRequest\uFF09";
+    nameInput.value = (spec.requestName ?? spec.api ?? "").trim();
+    nameInput.autocomplete = "off";
+    nameInput.addEventListener("input", () => {
+      if (!editedDetailSpec) return;
+      const nextName = nameInput.value.trim();
+      editedDetailSpec.requestName = nextName || void 0;
+      apiDetailNameEl.textContent = nextName || editedDetailSpec.api || "\u5C1A\u672A\u547D\u540D API";
+    });
+    nameWrap.appendChild(nameLabel);
+    nameWrap.appendChild(nameInput);
+    apiDetailPurposeEl.appendChild(nameWrap);
+    const purposeWrap = document.createElement("div");
+    purposeWrap.className = "api-detail-purpose-edit";
+    const purposeLabel = document.createElement("label");
+    purposeLabel.className = "api-detail-purpose-label";
+    purposeLabel.setAttribute("for", "apiDetailPurposeInput");
+    purposeLabel.textContent = "\u7528\u9014";
+    const purposeInput = document.createElement("input");
+    purposeInput.id = "apiDetailPurposeInput";
+    purposeInput.type = "text";
+    purposeInput.className = "api-detail-purpose-input";
+    purposeInput.placeholder = "\u7C21\u77ED\u8AAA\u660E\u6B64 API \u7684\u7528\u9014\uFF08\u53EF\u9078\uFF09";
+    purposeInput.value = (spec.purpose ?? "").trim();
+    purposeInput.autocomplete = "off";
+    purposeInput.addEventListener("input", () => {
+      if (editedDetailSpec) editedDetailSpec.purpose = purposeInput.value;
+    });
+    purposeWrap.appendChild(purposeLabel);
+    purposeWrap.appendChild(purposeInput);
+    apiDetailPurposeEl.appendChild(purposeWrap);
     const container = document.createDocumentFragment();
     const urlCode = document.createElement("code");
     urlCode.className = "detail-url-code";
@@ -600,51 +753,69 @@
         new URLSearchParams((spec.path ?? spec.api ?? "").slice(qIdx + 1)).forEach((v, k) => {
           urlParamObj[k] = v;
         });
-    } catch {}
-    const allParamKeys = [.../* @__PURE__ */ new Set([...(spec.params ?? []), ...Object.keys(urlParamObj)])];
-    if (allParamKeys.length) {
-      const sec = buildDetailSection("Params\uFF08URL \u67E5\u8A62\u53C3\u6578\uFF09", true);
-      const list = document.createElement("div");
-      list.className = "detail-edit-list";
-      allParamKeys.forEach((key) => {
-        const row = document.createElement("div");
-        row.className = "detail-edit-row";
-        const label = document.createElement("span");
-        label.className = "detail-edit-key";
-        label.textContent = key;
-        const inp = document.createElement("input");
-        inp.type = "text";
-        inp.className = "detail-edit-input";
-        inp.value = urlParamObj[key] ?? "";
-        inp.placeholder = "\uFF08\u503C\uFF09";
-        inp.addEventListener("input", () => {
-          if (!editedDetailSpec) return;
-          try {
-            const base = (editedDetailSpec.path ?? editedDetailSpec.api ?? "").split("?")[0];
-            const collected = {};
-            list.querySelectorAll(".detail-edit-row").forEach((r) => {
-              const k = r.querySelector(".detail-edit-key").textContent ?? "";
-              const v = r.querySelector(".detail-edit-input").value;
-              if (v) collected[k] = v;
-            });
-            const qs = new URLSearchParams(collected).toString();
-            const newPath = qs ? `${base}?${qs}` : base;
-            editedDetailSpec.path = newPath;
-            urlCode.textContent = `${editedDetailSpec.method ?? "GET"} ${newPath}`;
-          } catch {}
-        });
-        row.appendChild(label);
-        row.appendChild(inp);
-        list.appendChild(row);
-      });
-      sec.body.appendChild(list);
-      container.appendChild(sec.wrap);
+    } catch {
     }
+    const urlParamKeys = [...new Set(Object.keys(urlParamObj))];
+    const urlParamsSec = buildDetailSection(`Params\uFF08URL \u67E5\u8A62\u53C3\u6578\uFF0C${urlParamKeys.length} \u500B\uFF09`, true);
+    const urlParamsList = document.createElement("div");
+    urlParamsList.className = "detail-edit-list";
+    const rebuildUrlParams = () => {
+      if (!editedDetailSpec) return;
+      try {
+        const base = (editedDetailSpec.path ?? editedDetailSpec.api ?? "").split("?")[0];
+        const collected = {};
+        urlParamsList.querySelectorAll(".detail-edit-row").forEach((r) => {
+          const key = r.querySelector(".detail-edit-key-input")?.value.trim() ?? "";
+          const val = r.querySelector(".detail-edit-val-input")?.value ?? "";
+          if (key && val) collected[key] = val;
+        });
+        const qs = new URLSearchParams(collected).toString();
+        const newPath = qs ? `${base}?${qs}` : base;
+        editedDetailSpec.path = newPath;
+        editedDetailSpec.params = Array.from(/* @__PURE__ */ new Set([...editedDetailSpec.params ?? [], ...Object.keys(collected)]));
+        urlCode.textContent = `${editedDetailSpec.method ?? "GET"} ${newPath}`;
+      } catch {
+      }
+    };
+    const addEditableUrlParamRow = (key, value) => {
+      const row = document.createElement("div");
+      row.className = "detail-edit-row";
+      const keyInput = document.createElement("input");
+      keyInput.type = "text";
+      keyInput.className = "detail-edit-key-input detail-edit-input";
+      keyInput.value = key;
+      keyInput.placeholder = "Param key";
+      const valInput = document.createElement("input");
+      valInput.type = "text";
+      valInput.className = "detail-edit-val-input detail-edit-input";
+      valInput.value = value;
+      valInput.placeholder = "value";
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "header-remove";
+      removeBtn.textContent = "\u2715";
+      removeBtn.addEventListener("click", () => {
+        row.remove();
+        rebuildUrlParams();
+      });
+      keyInput.addEventListener("input", rebuildUrlParams);
+      valInput.addEventListener("input", rebuildUrlParams);
+      row.appendChild(keyInput);
+      row.appendChild(valInput);
+      row.appendChild(removeBtn);
+      urlParamsList.appendChild(row);
+    };
+    urlParamKeys.forEach((key) => addEditableUrlParamRow(key, urlParamObj[key] ?? ""));
+    const addParamBtn = document.createElement("button");
+    addParamBtn.type = "button";
+    addParamBtn.className = "detail-add-row-btn";
+    addParamBtn.textContent = "\uFF0B \u65B0\u589E Param";
+    addParamBtn.addEventListener("click", () => addEditableUrlParamRow("", ""));
+    urlParamsSec.body.appendChild(urlParamsList);
+    urlParamsSec.body.appendChild(addParamBtn);
+    container.appendChild(urlParamsSec.wrap);
     const visibleHeaders = Object.entries(spec.headers ?? {}).filter(([k]) => k.toLowerCase() !== "authorization");
-    const headerSec = buildDetailSection(
-      `Headers\uFF08${visibleHeaders.length} \u500B\uFF09`,
-      visibleHeaders.length > 0,
-    );
+    const headerSec = buildDetailSection(`Headers\uFF08${visibleHeaders.length} \u500B\uFF09`, visibleHeaders.length > 0);
     const headerList = document.createElement("div");
     headerList.className = "detail-edit-list";
     const rebuildEditedHeaders = () => {
@@ -705,11 +876,14 @@
     bodySec.body.appendChild(bodyTa);
     container.appendChild(bodySec.wrap);
     apiDetailParamsEl.replaceChildren(container);
+    refreshApiDetailActions(spec);
   }
   function refreshApiCandidatesFromLatestAssistant() {
     const latestAssistant = [...messages].reverse().find((m) => m.role === "assistant" && m.content.trim());
     apiCandidates = latestAssistant ? extractApiCandidatesFromText(latestAssistant.content) : [];
-    selectedApiIndex = apiCandidates.length ? 0 : -1;
+    selectedApiIndex = -1;
+    pinnedDetailSpec = null;
+    pinnedSavedApiIndex = -1;
     renderApiCandidates();
   }
   function isCustomSpec(spec) {
@@ -719,11 +893,17 @@
   function removeCustomSpec(spec) {
     const key = spec.path || spec.api;
     customApiSpecs = customApiSpecs.filter((c) => (c.path || c.api) !== key);
+    const pinnedKey = pinnedDetailSpec ? pinnedDetailSpec.path || pinnedDetailSpec.api : "";
+    if (pinnedKey && pinnedKey === key) {
+      pinnedDetailSpec = null;
+      pinnedSavedApiIndex = -1;
+    }
   }
   function renderApiCandidates() {
     const allCandidates = getAllApiCandidates();
     apiCandidatesEl.replaceChildren();
     if (!allCandidates.length) {
+      selectedApiIndex = -1;
       const empty = document.createElement("div");
       empty.className = "workflow-subtitle";
       empty.textContent = "\u5C1A\u672A\u5075\u6E2C\u5230 API\uFF0C\u53EF\u624B\u52D5\u65B0\u589E\u3002";
@@ -731,8 +911,8 @@
       renderApiDetail(null);
       return;
     }
-    if (selectedApiIndex < 0 || selectedApiIndex >= allCandidates.length) {
-      selectedApiIndex = 0;
+    if (selectedApiIndex >= allCandidates.length) {
+      selectedApiIndex = allCandidates.length - 1;
     }
     allCandidates.forEach((spec, index) => {
       const wrap = document.createElement("div");
@@ -754,6 +934,8 @@
       }
       row.addEventListener("click", () => {
         selectedApiIndex = index;
+        pinnedDetailSpec = null;
+        pinnedSavedApiIndex = -1;
         renderApiCandidates();
       });
       wrap.appendChild(row);
@@ -774,7 +956,8 @@
       }
       apiCandidatesEl.appendChild(wrap);
     });
-    renderApiDetail(allCandidates[selectedApiIndex] || null);
+    const selectedSpec = selectedApiIndex >= 0 ? allCandidates[selectedApiIndex] || null : pinnedDetailSpec;
+    renderApiDetail(selectedSpec || null);
   }
   function renderDraftSteps() {
     draftStepsEl.replaceChildren();
@@ -823,12 +1006,11 @@
       delBtn.type = "button";
       delBtn.className = "draft-step-delete";
       delBtn.textContent = "\u2715";
-      delBtn.title =
-        index === editingStepIndex
-          ? "\u7DE8\u8F2F\u4E2D\uFF0C\u7121\u6CD5\u522A\u9664"
-          : "\u79FB\u9664\u6B64\u6B65\u9A5F";
+      delBtn.title = index === editingStepIndex ? "\u7DE8\u8F2F\u4E2D\uFF0C\u7121\u6CD5\u522A\u9664" : "\u79FB\u9664\u6B64\u6B65\u9A5F";
       delBtn.disabled = index === editingStepIndex;
       delBtn.addEventListener("click", () => {
+        const stepTitle = step.requestName || step.api;
+        if (!confirmDelete(`\u78BA\u5B9A\u8981\u522A\u9664\u6B65\u9A5F\u300C${stepTitle}\u300D\u55CE\uFF1F`)) return;
         draftSteps.splice(index, 1);
         if (editingStepIndex === index) {
           editingStepIndex = -1;
@@ -856,17 +1038,26 @@
       savedWorkflowsEl.appendChild(empty);
       return;
     }
-    savedWorkflows.forEach((workflow) => {
-      const chip = document.createElement("button");
-      chip.type = "button";
-      chip.className = "workflow-chip";
-      chip.textContent = workflow.name;
-      chip.title = workflow.steps.map((step) => step.api).join(", ");
-      chip.addEventListener("click", () => {
+    savedWorkflows.forEach((workflow, index) => {
+      const card = document.createElement("div");
+      card.className = "workflow-card";
+      const nameEl = document.createElement("div");
+      nameEl.className = "workflow-card-name";
+      nameEl.textContent = workflow.name;
+      nameEl.title = workflow.steps.map((step) => step.api).join(", ");
+      const stepsEl = document.createElement("div");
+      stepsEl.className = "workflow-card-steps";
+      stepsEl.textContent = `${workflow.steps.length} \u6B65`;
+      const actions = document.createElement("div");
+      actions.className = "workflow-card-actions";
+      const loadBtn = document.createElement("button");
+      loadBtn.type = "button";
+      loadBtn.textContent = "\u8F09\u5165";
+      loadBtn.addEventListener("click", () => {
         draftSteps = workflow.steps.map((step) => ({
           ...step,
           params: [...step.params],
-          headers: step.headers ? { ...step.headers } : {},
+          headers: step.headers ? { ...step.headers } : {}
         }));
         currentWorkflowName = workflow.name;
         renderDraftSteps();
@@ -874,7 +1065,23 @@
         setToast(`\u5DF2\u8F09\u5165\u6D41\u7A0B\uFF1A${workflow.name}`, "ok");
         chatInputEl.focus();
       });
-      savedWorkflowsEl.appendChild(chip);
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "workflow-card-delete";
+      deleteBtn.textContent = "\u522A\u9664";
+      deleteBtn.addEventListener("click", async () => {
+        if (!confirmDelete(`\u78BA\u5B9A\u8981\u522A\u9664\u5DF2\u5132\u5B58\u6D41\u7A0B\u300C${workflow.name}\u300D\u55CE\uFF1F`)) return;
+        savedWorkflows.splice(index, 1);
+        renderSavedWorkflows();
+        await saveMessages();
+        setToast(`\u5DF2\u522A\u9664\u6D41\u7A0B\uFF1A${workflow.name}`, "ok");
+      });
+      actions.appendChild(loadBtn);
+      actions.appendChild(deleteBtn);
+      card.appendChild(nameEl);
+      card.appendChild(stepsEl);
+      card.appendChild(actions);
+      savedWorkflowsEl.appendChild(card);
     });
   }
   function renderSavedApis() {
@@ -889,8 +1096,7 @@
     customApiSpecs.forEach((spec, index) => {
       const card = document.createElement("div");
       card.className = "saved-api-card";
-      if (index === editingApiIndex) card.classList.add("editing");
-      else if (index === selectedApiIndex) card.classList.add("selected");
+      if (index === pinnedSavedApiIndex) card.classList.add("selected");
       const info = document.createElement("div");
       info.className = "saved-api-info";
       const nameEl = document.createElement("div");
@@ -909,32 +1115,13 @@
       const selectBtn = document.createElement("button");
       selectBtn.type = "button";
       selectBtn.textContent = "\u9078\u64C7";
-      if (index === selectedApiIndex) selectBtn.classList.add("active");
+      if (index === pinnedSavedApiIndex) selectBtn.classList.add("active");
       selectBtn.addEventListener("click", () => {
-        selectedApiIndex = index;
-        renderSavedApis();
-        renderApiDetail({ ...spec });
-      });
-      const editBtn = document.createElement("button");
-      editBtn.type = "button";
-      editBtn.textContent = "\u7DE8\u8F2F";
-      if (index === editingApiIndex) editBtn.classList.add("active");
-      editBtn.addEventListener("click", () => {
-        editingApiIndex = index;
         selectedApiIndex = -1;
+        pinnedSavedApiIndex = index;
+        pinnedDetailSpec = { ...spec, params: [...spec.params ?? []], headers: { ...spec.headers ?? {} } };
         renderSavedApis();
-        addManualApiButton.textContent = "\u5132\u5B58";
-        manualApiActionsEl.classList.add("hidden");
-        manualApiActionsEl.replaceChildren();
-        setManualApiOpen(true);
-        manualApiNameEl.value = spec.requestName ?? "";
-        manualApiMethodEl.value = spec.method ?? "GET";
-        manualApiPathEl.value = spec.path ?? spec.api ?? "";
-        renderManualHeaderRowsFromObject(spec.headers ?? {});
-        manualApiBodyEl.value = spec.bodyTemplate ?? "";
-        manualApiPurposeEl.value = spec.purpose ?? "";
-        updateManualFormActions();
-        setToast(`\u6B63\u5728\u7DE8\u8F2F\uFF1A${spec.requestName ?? spec.api}`, "normal");
+        renderApiCandidates();
       });
       const deleteBtn = document.createElement("button");
       deleteBtn.type = "button";
@@ -942,15 +1129,21 @@
       deleteBtn.textContent = "\u2715";
       deleteBtn.title = "\u522A\u9664\u6B64 API";
       deleteBtn.addEventListener("click", async () => {
+        const apiTitle = spec.requestName || spec.api;
+        if (!confirmDelete(`\u78BA\u5B9A\u8981\u522A\u9664\u5DF2\u5132\u5B58 API\u300C${apiTitle}\u300D\u55CE\uFF1F`)) return;
         customApiSpecs.splice(index, 1);
         if (editingApiIndex === index) editingApiIndex = -1;
-        if (selectedApiIndex === index) selectedApiIndex = -1;
+        if (pinnedSavedApiIndex === index) {
+          pinnedSavedApiIndex = -1;
+          pinnedDetailSpec = null;
+        } else if (pinnedSavedApiIndex > index) {
+          pinnedSavedApiIndex--;
+        }
         renderSavedApis();
         renderApiCandidates();
         await saveMessages();
       });
       actions.appendChild(selectBtn);
-      actions.appendChild(editBtn);
       actions.appendChild(deleteBtn);
       card.appendChild(info);
       card.appendChild(actions);
@@ -961,19 +1154,20 @@
     if (token.length <= 14) return token;
     return `${token.slice(0, 10)}...${token.slice(-4)}`;
   }
+  function confirmDelete(message) {
+    return globalThis.confirm(message);
+  }
   function createOAuthState() {
     if (globalThis.crypto?.getRandomValues) {
       const bytes = new Uint8Array(16);
       globalThis.crypto.getRandomValues(bytes);
-      return Array.from(bytes)
-        .map((byte) => byte.toString(16).padStart(2, "0"))
-        .join("");
+      return Array.from(bytes).map((byte) => byte.toString(16).padStart(2, "0")).join("");
     }
     return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
   async function fetchGoogleUserInfo(accessToken) {
     const response = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: { Authorization: `Bearer ${accessToken}` }
     });
     if (!response.ok) {
       throw new Error(`userinfo \u53D6\u5F97\u5931\u6557 (${response.status})`);
@@ -982,7 +1176,7 @@
   }
   async function exchangeGoogleTokenForFirebaseIdToken(googleAccessToken2) {
     const endpoint = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${encodeURIComponent(
-      FIREBASE_WEB_API_KEY,
+      FIREBASE_WEB_API_KEY
     )}`;
     const response = await fetch(endpoint, {
       method: "POST",
@@ -991,8 +1185,8 @@
         postBody: `access_token=${encodeURIComponent(googleAccessToken2)}&providerId=google.com`,
         requestUri: "https://localhost",
         returnIdpCredential: true,
-        returnSecureToken: true,
-      }),
+        returnSecureToken: true
+      })
     });
     if (!response.ok) {
       const text = await response.text();
@@ -1011,12 +1205,12 @@
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${firebaseIdToken}`,
-        "x-page-url": globalThis.location?.href || "",
+        "x-page-url": globalThis.location?.href || ""
       },
       body: JSON.stringify({
         message,
-        sessionId: chatSessionId,
-      }),
+        sessionId: chatSessionId
+      })
     });
     if (!response.ok) {
       const text = await response.text();
@@ -1053,51 +1247,52 @@
   }
   function stripThinkingText(text) {
     if (!text) return "";
-    return text
-      .replace(/<think>[\s\S]*?<\/think>/gi, "")
-      .replace(/\[thinking\][\s\S]*?\[\/thinking\]/gi, "")
-      .replace(/^\s*(思考|thinking)\s*[:：].*$/gim, "");
+    return text.replace(/<think>[\s\S]*?<\/think>/gi, "").replace(/\[thinking\][\s\S]*?\[\/thinking\]/gi, "").replace(/^\s*(思考|thinking)\s*[:：].*$/gim, "");
+  }
+  function parseSseBlock(block) {
+    let eventType = null;
+    const dataParts = [];
+    for (const raw of block.split("\n")) {
+      const line = raw.trim();
+      if (!line) continue;
+      if (line.startsWith("event:")) {
+        eventType = line.slice(6).trim().toLowerCase();
+      } else if (line.startsWith("data:")) {
+        dataParts.push(line.slice(5).trim());
+      }
+    }
+    return { eventType, payloadText: dataParts.join("\n") };
+  }
+  function shouldEmitSseDelta(eventType) {
+    if (eventType === null) return true;
+    return eventType === "delta";
   }
   function escapeHtml(text) {
-    return text
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
   function renderAssistantMarkdown(text) {
     const escaped = escapeHtml(text);
     const blocks = escaped.split(/\n{2,}/);
-    return blocks
-      .map((block) => {
-        const trimmed = block.trim();
-        if (!trimmed) return "";
-        if (trimmed.startsWith("### ")) {
-          return `<h4>${trimmed.slice(4)}</h4>`;
-        }
-        if (trimmed.startsWith("## ")) {
-          return `<h3>${trimmed.slice(3)}</h3>`;
-        }
-        if (trimmed.startsWith("# ")) {
-          return `<h2>${trimmed.slice(2)}</h2>`;
-        }
-        const lines = trimmed.split("\n");
-        if (lines.every((line) => /^\s*[-*]\s+/.test(line))) {
-          const items = lines
-            .map((line) => line.replace(/^\s*[-*]\s+/, ""))
-            .map((line) => `<li>${line}</li>`)
-            .join("");
-          return `<ul>${items}</ul>`;
-        }
-        const paragraph = trimmed
-          .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-          .replace(/`([^`]+?)`/g, "<code>$1</code>")
-          .replace(/\n/g, "<br>");
-        return `<p>${paragraph}</p>`;
-      })
-      .filter(Boolean)
-      .join("");
+    return blocks.map((block) => {
+      const trimmed = block.trim();
+      if (!trimmed) return "";
+      if (trimmed.startsWith("### ")) {
+        return `<h4>${trimmed.slice(4)}</h4>`;
+      }
+      if (trimmed.startsWith("## ")) {
+        return `<h3>${trimmed.slice(3)}</h3>`;
+      }
+      if (trimmed.startsWith("# ")) {
+        return `<h2>${trimmed.slice(2)}</h2>`;
+      }
+      const lines = trimmed.split("\n");
+      if (lines.every((line) => /^\s*[-*]\s+/.test(line))) {
+        const items = lines.map((line) => line.replace(/^\s*[-*]\s+/, "")).map((line) => `<li>${line}</li>`).join("");
+        return `<ul>${items}</ul>`;
+      }
+      const paragraph = trimmed.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/`([^`]+?)`/g, "<code>$1</code>").replace(/\n/g, "<br>");
+      return `<p>${paragraph}</p>`;
+    }).filter(Boolean).join("");
   }
   async function callAgentChatApiStream(message, onDelta) {
     if (!firebaseIdToken) {
@@ -1109,12 +1304,12 @@
         "Content-Type": "application/json",
         Authorization: `Bearer ${firebaseIdToken}`,
         "x-page-url": globalThis.location?.href || "",
-        Accept: "text/event-stream, application/json, text/plain",
+        Accept: "text/event-stream, application/json, text/plain"
       },
       body: JSON.stringify({
         message,
-        sessionId: chatSessionId,
-      }),
+        sessionId: chatSessionId
+      })
     });
     if (!response.ok) {
       const text = await response.text();
@@ -1143,12 +1338,8 @@
         const events = buffer.split("\n\n");
         buffer = events.pop() || "";
         for (const event of events) {
-          const lines = event
-            .split("\n")
-            .map((line) => line.trim())
-            .filter((line) => line.startsWith("data:"))
-            .map((line) => line.slice(5).trim());
-          const payloadText = lines.join("\n");
+          const { eventType, payloadText } = parseSseBlock(event);
+          if (!shouldEmitSseDelta(eventType)) continue;
           if (!payloadText || payloadText === "[DONE]") continue;
           let deltaText = "";
           try {
@@ -1169,17 +1360,21 @@
       }
     }
     if (contentType.includes("text/event-stream")) {
-      const rest = buffer.trim();
-      if (rest && rest !== "[DONE]") {
-        const cleaned = rest.startsWith("data:") ? rest.replace(/^data:\s*/gm, "").trim() : rest;
-        let deltaText = "";
-        try {
-          deltaText = extractTextFromPayload(JSON.parse(cleaned));
-        } catch {
-          deltaText = cleaned;
-        }
-        deltaText = stripThinkingText(deltaText);
-        if (deltaText) {
+      const tail = buffer.trim();
+      if (tail && tail !== "[DONE]") {
+        const tailEvents = tail.split("\n\n").filter(Boolean);
+        for (const ev of tailEvents) {
+          const { eventType, payloadText } = parseSseBlock(ev);
+          if (!shouldEmitSseDelta(eventType)) continue;
+          if (!payloadText || payloadText === "[DONE]") continue;
+          let deltaText = "";
+          try {
+            deltaText = extractTextFromPayload(JSON.parse(payloadText));
+          } catch {
+            deltaText = payloadText;
+          }
+          deltaText = stripThinkingText(deltaText);
+          if (!deltaText) continue;
           accumulated += deltaText;
           onDelta(deltaText);
         }
@@ -1204,8 +1399,7 @@
     if (!messages.length) {
       const empty = document.createElement("div");
       empty.className = "empty-tip";
-      empty.textContent =
-        "\u5148\u8F38\u5165\u9700\u6C42\uFF0C\u4F8B\u5982\uFF1A\u696D\u52D9\u96E2\u8077\u5F8C\u8981\u505C\u7528 sales \u8207 lineUser \u8EAB\u4EFD\u3002";
+      empty.textContent = "\u5148\u8F38\u5165\u9700\u6C42\uFF0C\u4F8B\u5982\uFF1A\u696D\u52D9\u96E2\u8077\u5F8C\u8981\u505C\u7528 sales \u8207 lineUser \u8EAB\u4EFD\u3002";
       chatMessagesEl.appendChild(empty);
       return;
     }
@@ -1231,23 +1425,21 @@
   }
   async function loadMessages() {
     const storageLocal = extensionChrome?.storage?.local;
-    const saved = storageLocal
-      ? await storageLocal.get([
-          STORAGE_KEY,
-          SESSION_ID_KEY,
-          WORKFLOWS_KEY,
-          AUTH_STATE_KEY,
-          CUSTOM_APIS_KEY,
-          EXEC_RESULTS_KEY,
-        ])
-      : {
-          [STORAGE_KEY]: fallbackStorage.get(STORAGE_KEY),
-          [SESSION_ID_KEY]: fallbackStorage.get(SESSION_ID_KEY),
-          [WORKFLOWS_KEY]: fallbackStorage.get(WORKFLOWS_KEY),
-          [AUTH_STATE_KEY]: fallbackStorage.get(AUTH_STATE_KEY),
-          [CUSTOM_APIS_KEY]: fallbackStorage.get(CUSTOM_APIS_KEY),
-          [EXEC_RESULTS_KEY]: fallbackStorage.get(EXEC_RESULTS_KEY),
-        };
+    const saved = storageLocal ? await storageLocal.get([
+      STORAGE_KEY,
+      SESSION_ID_KEY,
+      WORKFLOWS_KEY,
+      AUTH_STATE_KEY,
+      CUSTOM_APIS_KEY,
+      EXEC_RESULTS_KEY
+    ]) : {
+      [STORAGE_KEY]: fallbackStorage.get(STORAGE_KEY),
+      [SESSION_ID_KEY]: fallbackStorage.get(SESSION_ID_KEY),
+      [WORKFLOWS_KEY]: fallbackStorage.get(WORKFLOWS_KEY),
+      [AUTH_STATE_KEY]: fallbackStorage.get(AUTH_STATE_KEY),
+      [CUSTOM_APIS_KEY]: fallbackStorage.get(CUSTOM_APIS_KEY),
+      [EXEC_RESULTS_KEY]: fallbackStorage.get(EXEC_RESULTS_KEY)
+    };
     setAuthStatus("\u5C1A\u672A\u6388\u6B0A\uFF0C\u8ACB\u5148\u6309\u300CGoogle \u6388\u6B0A\u300D\u3002", "normal");
     setChatEnabled(false);
     if (typeof saved[SESSION_ID_KEY] === "string" && saved[SESSION_ID_KEY]) {
@@ -1258,13 +1450,7 @@
         const parsed = JSON.parse(saved[STORAGE_KEY]);
         if (Array.isArray(parsed)) {
           messages = parsed.slice(-MAX_MESSAGES).filter((item) => {
-            return (
-              Boolean(item) &&
-              typeof item === "object" &&
-              item.role !== void 0 &&
-              typeof item.content === "string" &&
-              typeof item.at === "string"
-            );
+            return Boolean(item) && typeof item === "object" && item.role !== void 0 && typeof item.content === "string" && typeof item.at === "string";
           });
         }
       } catch {
@@ -1275,36 +1461,25 @@
       try {
         const parsedWorkflows = JSON.parse(saved[WORKFLOWS_KEY]);
         if (Array.isArray(parsedWorkflows)) {
-          savedWorkflows = parsedWorkflows
-            .filter((item) => Boolean(item) && typeof item === "object")
-            .map((item) => {
-              const legacySteps = Array.isArray(item.apis)
-                ? item.apis
-                    .map((api) => String(api || "").trim())
-                    .filter(Boolean)
-                    .map((api) => ({ api, purpose: "\u5F85\u88DC\u5145\u76EE\u7684", params: [] }))
-                : [];
-              const steps = Array.isArray(item.steps)
-                ? item.steps
-                    .filter((step) => step && typeof step.api === "string")
-                    .map((step) => ({
-                      api: step.api,
-                      path: typeof step.path === "string" ? step.path : void 0,
-                      requestName: typeof step.requestName === "string" ? step.requestName : void 0,
-                      method: typeof step.method === "string" ? step.method : void 0,
-                      headers: step.headers && typeof step.headers === "object" ? { ...step.headers } : {},
-                      bodyTemplate: typeof step.bodyTemplate === "string" ? step.bodyTemplate : "",
-                      bearerToken: typeof step.bearerToken === "string" ? step.bearerToken : "",
-                      purpose: typeof step.purpose === "string" ? step.purpose : "\u5F85\u88DC\u5145\u76EE\u7684",
-                      params: Array.isArray(step.params) ? step.params.map((p) => String(p)) : [],
-                    }))
-                : legacySteps;
-              return {
-                id: typeof item.id === "string" ? item.id : `wf-${Date.now()}`,
-                name: typeof item.name === "string" ? item.name : "\u672A\u547D\u540D\u6D41\u7A0B",
-                steps,
-              };
-            });
+          savedWorkflows = parsedWorkflows.filter((item) => Boolean(item) && typeof item === "object").map((item) => {
+            const legacySteps = Array.isArray(item.apis) ? item.apis.map((api) => String(api || "").trim()).filter(Boolean).map((api) => ({ api, purpose: "\u5F85\u88DC\u5145\u76EE\u7684", params: [] })) : [];
+            const steps = Array.isArray(item.steps) ? item.steps.filter((step) => step && typeof step.api === "string").map((step) => ({
+              api: step.api,
+              path: typeof step.path === "string" ? step.path : void 0,
+              requestName: typeof step.requestName === "string" ? step.requestName : void 0,
+              method: typeof step.method === "string" ? step.method : void 0,
+              headers: step.headers && typeof step.headers === "object" ? { ...step.headers } : {},
+              bodyTemplate: typeof step.bodyTemplate === "string" ? step.bodyTemplate : "",
+              bearerToken: typeof step.bearerToken === "string" ? step.bearerToken : "",
+              purpose: typeof step.purpose === "string" ? step.purpose : "\u5F85\u88DC\u5145\u76EE\u7684",
+              params: Array.isArray(step.params) ? step.params.map((p) => String(p)) : []
+            })) : legacySteps;
+            return {
+              id: typeof item.id === "string" ? item.id : `wf-${Date.now()}`,
+              name: typeof item.name === "string" ? item.name : "\u672A\u547D\u540D\u6D41\u7A0B",
+              steps
+            };
+          });
         }
       } catch {
         savedWorkflows = [];
@@ -1314,19 +1489,17 @@
       try {
         const parsedCustomApis = JSON.parse(saved[CUSTOM_APIS_KEY]);
         if (Array.isArray(parsedCustomApis)) {
-          customApiSpecs = parsedCustomApis
-            .filter((item) => item && typeof item.api === "string")
-            .map((item) => ({
-              api: item.api,
-              path: typeof item.path === "string" ? item.path : void 0,
-              requestName: typeof item.requestName === "string" ? item.requestName : void 0,
-              method: typeof item.method === "string" ? item.method : void 0,
-              headers: item.headers && typeof item.headers === "object" ? item.headers : {},
-              bodyTemplate: typeof item.bodyTemplate === "string" ? item.bodyTemplate : "",
-              bearerToken: typeof item.bearerToken === "string" ? item.bearerToken : "",
-              purpose: typeof item.purpose === "string" ? item.purpose : "",
-              params: Array.isArray(item.params) ? item.params.map((p) => String(p)) : [],
-            }));
+          customApiSpecs = parsedCustomApis.filter((item) => item && typeof item.api === "string").map((item) => ({
+            api: item.api,
+            path: typeof item.path === "string" ? item.path : void 0,
+            requestName: typeof item.requestName === "string" ? item.requestName : void 0,
+            method: typeof item.method === "string" ? item.method : void 0,
+            headers: item.headers && typeof item.headers === "object" ? item.headers : {},
+            bodyTemplate: typeof item.bodyTemplate === "string" ? item.bodyTemplate : "",
+            bearerToken: typeof item.bearerToken === "string" ? item.bearerToken : "",
+            purpose: typeof item.purpose === "string" ? item.purpose : "",
+            params: Array.isArray(item.params) ? item.params.map((p) => String(p)) : []
+          }));
         }
       } catch {
         customApiSpecs = [];
@@ -1336,6 +1509,7 @@
     refreshApiCandidatesFromLatestAssistant();
     renderDraftSteps();
     renderSavedWorkflows();
+    renderSavedApis();
     try {
       if (typeof saved[EXEC_RESULTS_KEY] === "string" && saved[EXEC_RESULTS_KEY]) {
         const parsed = JSON.parse(saved[EXEC_RESULTS_KEY]);
@@ -1359,15 +1533,13 @@
           setOAuthInfo(`account_email: ${accountEmail}`);
           return;
         }
-      } catch {}
+      } catch {
+      }
     }
     const identityInfo = await checkIdentityAuthorization();
     console.log("identityInfo", identityInfo);
     if (identityInfo.authorized) {
-      setAuthStatus(
-        `${identityInfo.message}\uFF0C\u4F46 Token \u5DF2\u904E\u671F\uFF0C\u8ACB\u91CD\u65B0\u6388\u6B0A\u3002`,
-        "normal",
-      );
+      setAuthStatus(`${identityInfo.message}\uFF0C\u4F46 Token \u5DF2\u904E\u671F\uFF0C\u8ACB\u91CD\u65B0\u6388\u6B0A\u3002`, "normal");
     }
   }
   async function saveMessages() {
@@ -1377,7 +1549,7 @@
       [WORKFLOWS_KEY]: JSON.stringify(savedWorkflows),
       [AUTH_STATE_KEY]: JSON.stringify(getCurrentAuthState()),
       [CUSTOM_APIS_KEY]: JSON.stringify(customApiSpecs.slice(0, 50)),
-      [EXEC_RESULTS_KEY]: JSON.stringify(execResults.slice(0, MAX_EXEC_RESULTS)),
+      [EXEC_RESULTS_KEY]: JSON.stringify(execResults.slice(0, MAX_EXEC_RESULTS))
     };
     const storageLocal = extensionChrome?.storage?.local;
     if (storageLocal) return storageLocal.set(data);
@@ -1392,7 +1564,7 @@
     messages.push({
       role,
       content,
-      at: /* @__PURE__ */ new Date().toLocaleTimeString("zh-Hant-TW", { hour: "2-digit", minute: "2-digit" }),
+      at: (/* @__PURE__ */ new Date()).toLocaleTimeString("zh-Hant-TW", { hour: "2-digit", minute: "2-digit" })
     });
     messages = messages.slice(-MAX_MESSAGES);
     renderMessages();
@@ -1417,10 +1589,7 @@
           return;
         }
         if (!userInfo?.email) {
-          resolve({
-            authorized: false,
-            message: "\u5C1A\u672A\u5B8C\u6210 OAuth \u6388\u6B0A\uFF0C\u8ACB\u6309\u300CGoogle \u6388\u6B0A\u300D",
-          });
+          resolve({ authorized: false, message: "\u5C1A\u672A\u5B8C\u6210 OAuth \u6388\u6B0A\uFF0C\u8ACB\u6309\u300CGoogle \u6388\u6B0A\u300D" });
           return;
         }
         resolve({ authorized: true, message: `\u5DF2\u5075\u6E2C\u700F\u89BD\u5668\u5E33\u865F ${userInfo.email}` });
@@ -1442,48 +1611,41 @@
       authUrl.searchParams.set("prompt", "select_account");
       const oauthState = createOAuthState();
       authUrl.searchParams.set("state", oauthState);
-      extensionChrome.identity.launchWebAuthFlow({ url: authUrl.toString(), interactive: true }, (responseUrl) => {
-        const maybeError = extensionChrome?.runtime?.lastError?.message;
-        if (maybeError) {
-          reject(
-            new Error(
-              `${maybeError}\uFF08\u8ACB\u78BA\u8A8D OAuth client \u5DF2\u5141\u8A31 redirect URI: ${redirectUri}\uFF09`,
-            ),
-          );
-          return;
+      extensionChrome.identity.launchWebAuthFlow(
+        { url: authUrl.toString(), interactive: true },
+        (responseUrl) => {
+          const maybeError = extensionChrome?.runtime?.lastError?.message;
+          if (maybeError) {
+            reject(new Error(`${maybeError}\uFF08\u8ACB\u78BA\u8A8D OAuth client \u5DF2\u5141\u8A31 redirect URI: ${redirectUri}\uFF09`));
+            return;
+          }
+          if (!responseUrl) {
+            reject(new Error("\u6388\u6B0A\u6D41\u7A0B\u672A\u56DE\u50B3 response URL"));
+            return;
+          }
+          const hash = responseUrl.split("#")[1] || "";
+          const params = new URLSearchParams(hash);
+          const returnedState = params.get("state");
+          if (!returnedState || returnedState !== oauthState) {
+            reject(new Error("OAuth state \u9A57\u8B49\u5931\u6557\uFF0C\u53EF\u80FD\u5B58\u5728\u8ACB\u6C42\u507D\u9020\u98A8\u96AA"));
+            return;
+          }
+          const accessToken = params.get("access_token");
+          if (!accessToken) {
+            const error = params.get("error");
+            const errorDescription = params.get("error_description");
+            reject(new Error(`OAuth \u672A\u53D6\u5F97 access token: ${error || "unknown"} ${errorDescription || ""}`.trim()));
+            return;
+          }
+          resolve({
+            accessToken,
+            expiresIn: params.get("expires_in") || "(unknown)",
+            scope: params.get("scope") || "(unknown)",
+            tokenType: params.get("token_type") || "(unknown)",
+            redirectUri
+          });
         }
-        if (!responseUrl) {
-          reject(new Error("\u6388\u6B0A\u6D41\u7A0B\u672A\u56DE\u50B3 response URL"));
-          return;
-        }
-        const hash = responseUrl.split("#")[1] || "";
-        const params = new URLSearchParams(hash);
-        const returnedState = params.get("state");
-        if (!returnedState || returnedState !== oauthState) {
-          reject(
-            new Error(
-              "OAuth state \u9A57\u8B49\u5931\u6557\uFF0C\u53EF\u80FD\u5B58\u5728\u8ACB\u6C42\u507D\u9020\u98A8\u96AA",
-            ),
-          );
-          return;
-        }
-        const accessToken = params.get("access_token");
-        if (!accessToken) {
-          const error = params.get("error");
-          const errorDescription = params.get("error_description");
-          reject(
-            new Error(`OAuth \u672A\u53D6\u5F97 access token: ${error || "unknown"} ${errorDescription || ""}`.trim()),
-          );
-          return;
-        }
-        resolve({
-          accessToken,
-          expiresIn: params.get("expires_in") || "(unknown)",
-          scope: params.get("scope") || "(unknown)",
-          tokenType: params.get("token_type") || "(unknown)",
-          redirectUri,
-        });
-      });
+      );
     });
   }
   async function authorizeNow() {
@@ -1511,7 +1673,7 @@
       console.log("[personal-extension] oauthGrant", {
         ...grant,
         accountEmail,
-        accessToken: maskToken(grant.accessToken),
+        accessToken: maskToken(grant.accessToken)
       });
     } catch (error) {
       clearAuthStateInMemory();
@@ -1639,13 +1801,10 @@
         if (k.toLowerCase() !== "authorization") cleanedHeaders[k] = v;
       }
       const alreadyExists = customApiSpecs.some(
-        (s) => s.path === (step.path || step.api) && s.requestName === step.requestName,
+        (s) => s.path === (step.path || step.api) && s.requestName === step.requestName
       );
       if (alreadyExists) {
-        setToast(
-          `\u300C${step.requestName || step.api}\u300D\u5DF2\u5728\u5DF2\u5132\u5B58\u7684 API \u4E2D\u3002`,
-          "error",
-        );
+        setToast(`\u300C${step.requestName || step.api}\u300D\u5DF2\u5728\u5DF2\u5132\u5B58\u7684 API \u4E2D\u3002`, "error");
         return;
       }
       customApiSpecs.push({
@@ -1656,7 +1815,7 @@
         headers: cleanedHeaders,
         bodyTemplate: step.bodyTemplate,
         purpose: step.purpose ?? "",
-        params: [...(step.params ?? [])],
+        params: [...step.params ?? []]
       });
       renderSavedApis();
       renderApiCandidates();
@@ -1678,10 +1837,7 @@
   }
   async function executeDraftWorkflow() {
     if (!draftSteps.length) {
-      setToast(
-        "\u6D41\u7A0B\u8349\u7A3F\u662F\u7A7A\u7684\uFF0C\u8ACB\u5148\u52A0\u5165 API \u6B65\u9A5F\u3002",
-        "error",
-      );
+      setToast("\u6D41\u7A0B\u8349\u7A3F\u662F\u7A7A\u7684\uFF0C\u8ACB\u5148\u52A0\u5165 API \u6B65\u9A5F\u3002", "error");
       return;
     }
     if (isAuthExpired()) {
@@ -1689,7 +1845,7 @@
       return;
     }
     const workflowName = currentWorkflowName || "\u8349\u7A3F";
-    const timestamp = /* @__PURE__ */ new Date().toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" });
+    const timestamp = (/* @__PURE__ */ new Date()).toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" });
     const block = document.createElement("div");
     block.className = "exec-workflow-block";
     const toggle = document.createElement("button");
@@ -1726,7 +1882,7 @@
       ui.row.className = "exec-step-row";
       const url = step.path || step.api;
       const method = (step.method || "GET").toUpperCase();
-      const baseHeaders = { ...(step.headers || {}) };
+      const baseHeaders = { ...step.headers || {} };
       for (const k of Object.keys(baseHeaders)) {
         if (k.toLowerCase() === "authorization") delete baseHeaders[k];
       }
@@ -1735,14 +1891,14 @@
       const headers = {
         ...baseHeaders,
         Authorization: `Bearer ${firebaseIdToken}`,
-        "Content-Type": contentType,
+        "Content-Type": contentType
       };
       const hasBody = !!step.bodyTemplate && ["POST", "PUT", "PATCH"].includes(method);
       try {
         const resp = await fetch(url, {
           method,
           headers,
-          ...(hasBody ? { body: step.bodyTemplate } : {}),
+          ...hasBody ? { body: step.bodyTemplate } : {}
         });
         const ct = resp.headers.get("content-type") ?? "";
         let resultText;
@@ -1784,12 +1940,7 @@
       }
     }
     toggle.textContent = `${allOk ? "\u2705" : "\u274C"} \u25BE  \u3010${workflowName}\u3011${timestamp}`;
-    setToast(
-      allOk
-        ? "\u6D41\u7A0B\u5DF2\u5168\u90E8\u57F7\u884C\u6210\u529F \u2705"
-        : "\u6D41\u7A0B\u57F7\u884C\u5B8C\u6210\uFF0C\u90E8\u5206\u6B65\u9A5F\u5931\u6557 \u274C",
-      allOk ? "ok" : "error",
-    );
+    setToast(allOk ? "\u6D41\u7A0B\u5DF2\u5168\u90E8\u57F7\u884C\u6210\u529F \u2705" : "\u6D41\u7A0B\u57F7\u884C\u5B8C\u6210\uFF0C\u90E8\u5206\u6B65\u9A5F\u5931\u6557 \u274C", allOk ? "ok" : "error");
     const resultRecord = {
       workflowName,
       timestamp,
@@ -1799,8 +1950,8 @@
         name: step.requestName || step.api || step.path || `\u6B65\u9A5F ${i + 1}`,
         ok: stepUIs[i].row.classList.contains("ok"),
         statusText: stepUIs[i].statusText.textContent || "",
-        response: stepUIs[i].responsePre.textContent || "",
-      })),
+        response: stepUIs[i].responsePre.textContent || ""
+      }))
     };
     execResults.unshift(resultRecord);
     if (execResults.length > MAX_EXEC_RESULTS) execResults = execResults.slice(0, MAX_EXEC_RESULTS);
@@ -1848,35 +1999,10 @@
     }
     const value = chatInputEl.value.trim();
     if (!value) return;
-    if (shouldPromptSkillConfirm(value)) {
-      pendingUserMessage = value;
-      toggleSkillConfirm(true);
-      setToast(
-        "\u5075\u6E2C\u5230\u53EF\u7528 skill\uFF0C\u8ACB\u5148\u9078\u64C7\u662F\u5426\u4F7F\u7528\u3002",
-        "normal",
-      );
-      return;
-    }
-    await sendChatMessage(value, false);
-  });
-  skillUseButton.addEventListener("click", async () => {
-    if (!pendingUserMessage.trim()) return;
-    const value = pendingUserMessage;
-    pendingUserMessage = "";
-    toggleSkillConfirm(false);
-    await sendChatMessage(value, true);
-  });
-  skillSkipButton.addEventListener("click", async () => {
-    if (!pendingUserMessage.trim()) return;
-    const value = pendingUserMessage;
-    pendingUserMessage = "";
-    toggleSkillConfirm(false);
     await sendChatMessage(value, false);
   });
   clearChatButton.addEventListener("click", () => {
     messages = [];
-    pendingUserMessage = "";
-    toggleSkillConfirm(false);
     renderMessages();
     void saveMessages();
   });
@@ -1905,9 +2031,7 @@
   });
   toggleExecutionResultButton.addEventListener("click", () => {
     const collapsed = executionResultPanelEl.classList.toggle("collapsed");
-    toggleExecutionResultButton.textContent = collapsed
-      ? "\u57F7\u884C\u7D50\u679C \u25B8"
-      : "\u57F7\u884C\u7D50\u679C \u25BE";
+    toggleExecutionResultButton.textContent = collapsed ? "\u57F7\u884C\u7D50\u679C \u25B8" : "\u57F7\u884C\u7D50\u679C \u25BE";
   });
   toggleSavedWorkflowsButton.addEventListener("click", () => {
     setSavedWorkflowsOpen(!savedWorkflowsOpen);
@@ -1916,6 +2040,14 @@
     execResults = [];
     executionResultListEl.replaceChildren();
     await saveMessages();
+  });
+  cancelApiDetailButton.addEventListener("click", () => {
+    selectedApiIndex = -1;
+    pinnedDetailSpec = null;
+    pinnedSavedApiIndex = -1;
+    resetApiDetail();
+    renderApiCandidates();
+    renderSavedApis();
   });
   addStepButton.addEventListener("click", () => {
     const spec = editedDetailSpec ?? getAllApiCandidates()[selectedApiIndex];
@@ -1932,7 +2064,7 @@
       bodyTemplate: spec.bodyTemplate,
       bearerToken: spec.bearerToken,
       purpose: spec.purpose || "",
-      params: [...(spec.params || [])],
+      params: [...spec.params || []]
     };
     if (editingStepIndex >= 0 && editingStepIndex < draftSteps.length) {
       draftSteps[editingStepIndex] = stepData;
@@ -1945,6 +2077,60 @@
       setToast(`\u5DF2\u52A0\u5165\u6B65\u9A5F\uFF1A${stepData.requestName || stepData.api}`, "ok");
     }
     renderDraftSteps();
+  });
+  function getCurrentDetailSpec() {
+    const src = editedDetailSpec ?? (selectedApiIndex >= 0 ? getAllApiCandidates()[selectedApiIndex] : pinnedDetailSpec);
+    if (!src) return null;
+    return {
+      ...src,
+      api: src.api || src.path || "",
+      path: src.path,
+      requestName: src.requestName,
+      method: src.method,
+      headers: src.headers ? { ...src.headers } : {},
+      bodyTemplate: src.bodyTemplate,
+      bearerToken: src.bearerToken,
+      purpose: src.purpose || "",
+      params: [...src.params || []]
+    };
+  }
+  saveDetailApiButton.addEventListener("click", async () => {
+    const spec = getCurrentDetailSpec();
+    if (!spec) {
+      setToast("\u8ACB\u5148\u9078\u64C7\u4E00\u500B API\u3002", "error");
+      return;
+    }
+    const baseName = (spec.requestName || spec.api || "CustomApi").trim();
+    const isDup = customApiSpecs.some(
+      (s) => (s.requestName || s.api) === baseName && (s.path || s.api) === (spec.path || spec.api)
+    );
+    if (isDup) {
+      spec.requestName = `${baseName}-copy`;
+      spec.api = spec.path || spec.requestName;
+    }
+    customApiSpecs = [spec, ...customApiSpecs].slice(0, 50);
+    selectedApiIndex = -1;
+    pinnedSavedApiIndex = 0;
+    pinnedDetailSpec = spec;
+    renderSavedApis();
+    renderApiCandidates();
+    setSavedApisOpen(true);
+    await saveMessages();
+    setToast(isDup ? `\u5DF2\u53E6\u5B58\u70BA\u300C${spec.requestName}\u300D` : `\u5DF2\u5132\u5B58 API\uFF1A${baseName}`, "ok");
+  });
+  updateDetailApiButton.addEventListener("click", async () => {
+    const spec = getCurrentDetailSpec();
+    const targetIndex = pinnedSavedApiIndex;
+    if (!spec || targetIndex < 0) {
+      setToast("\u627E\u4E0D\u5230\u5C0D\u61C9\u7684\u5DF2\u5132\u5B58 API \u53EF\u66F4\u65B0\u3002", "error");
+      return;
+    }
+    customApiSpecs[targetIndex] = spec;
+    pinnedDetailSpec = spec;
+    renderSavedApis();
+    renderApiCandidates();
+    await saveMessages();
+    setToast(`\u5DF2\u66F4\u65B0\u5DF2\u5132\u5B58 API\uFF1A${spec.requestName || spec.api}`, "ok");
   });
   function clearFieldError(el) {
     el.classList.remove("field-error");
@@ -1984,7 +2170,7 @@
       bodyTemplate,
       bearerToken,
       purpose,
-      params,
+      params
     };
     return { name, path, spec };
   }
@@ -1999,7 +2185,7 @@
       const { name, spec } = buildSpecFromForm();
       if (!name || !spec.path) return;
       const isDup = customApiSpecs.some(
-        (s) => (s.requestName || s.api) === name && (s.path || s.api) === (spec.path || spec.api),
+        (s) => (s.requestName || s.api) === name && (s.path || s.api) === (spec.path || spec.api)
       );
       let finalName = name;
       if (isDup) {
@@ -2012,10 +2198,7 @@
       setSavedApisOpen(true);
       clearManualForm();
       await saveMessages();
-      setToast(
-        isDup ? `\u5DF2\u53E6\u5B58\u70BA\u300C${finalName}\u300D` : `\u5DF2\u5132\u5B58 API\uFF1A${finalName}`,
-        "ok",
-      );
+      setToast(isDup ? `\u5DF2\u53E6\u5B58\u70BA\u300C${finalName}\u300D` : `\u5DF2\u5132\u5B58 API\uFF1A${finalName}`, "ok");
     });
     const addStepBtn = document.createElement("button");
     addStepBtn.type = "button";
@@ -2024,7 +2207,7 @@
     addStepBtn.addEventListener("click", () => {
       const { name, spec } = buildSpecFromForm();
       if (!name || !spec.path) return;
-      draftSteps.push({ ...spec, params: [...(spec.params ?? [])] });
+      draftSteps.push({ ...spec, params: [...spec.params ?? []] });
       renderDraftSteps();
       renderApiDetail(spec);
       clearManualForm();
@@ -2086,24 +2269,23 @@
   });
   function showExecutionConfirmDialog() {
     return new Promise((resolve) => {
-      const stepsToReview = draftSteps
-        .map((step, i) => {
-          const urlParams = {};
-          try {
-            const urlObj = new URL(step.path ?? step.api ?? "");
-            urlObj.searchParams.forEach((v, k) => {
-              urlParams[k] = v;
-            });
-          } catch {}
-          return {
-            step,
-            index: i,
-            urlParams,
-            hasParams: Object.keys(urlParams).length > 0,
-            hasBody: !!step.bodyTemplate?.trim(),
-          };
-        })
-        .filter((s) => s.hasParams || s.hasBody);
+      const stepsToReview = draftSteps.map((step, i) => {
+        const urlParams = {};
+        try {
+          const urlObj = new URL(step.path ?? step.api ?? "");
+          urlObj.searchParams.forEach((v, k) => {
+            urlParams[k] = v;
+          });
+        } catch {
+        }
+        return {
+          step,
+          index: i,
+          urlParams,
+          hasParams: Object.keys(urlParams).length > 0,
+          hasBody: !!step.bodyTemplate?.trim()
+        };
+      }).filter((s) => s.hasParams || s.hasBody);
       if (!stepsToReview.length) {
         resolve(true);
         return;
@@ -2117,8 +2299,7 @@
       titleEl.textContent = "\u57F7\u884C\u524D\u78BA\u8A8D";
       const subtitleEl = document.createElement("div");
       subtitleEl.className = "exec-confirm-subtitle";
-      subtitleEl.textContent =
-        "\u8ACB\u78BA\u8A8D\u4EE5\u4E0B\u6B65\u9A5F\u7684\u53C3\u6578\uFF0C\u78BA\u8A8D\u7121\u8AA4\u5F8C\u518D\u57F7\u884C\u3002";
+      subtitleEl.textContent = "\u8ACB\u78BA\u8A8D\u4EE5\u4E0B\u6B65\u9A5F\u7684\u53C3\u6578\uFF0C\u78BA\u8A8D\u7121\u8AA4\u5F8C\u518D\u57F7\u884C\u3002";
       const stepsWrap = document.createElement("div");
       stepsWrap.className = "exec-confirm-steps";
       const stepEditors = [];
@@ -2236,10 +2417,10 @@
         steps: draftSteps.map((step) => ({
           ...step,
           params: [...step.params],
-          headers: step.headers ? { ...step.headers } : {},
-        })),
+          headers: step.headers ? { ...step.headers } : {}
+        }))
       },
-      ...savedWorkflows,
+      ...savedWorkflows
     ].slice(0, 20);
     renderSavedWorkflows();
     setSavedWorkflowsOpen(true);
@@ -2247,6 +2428,8 @@
     setToast(`\u5DF2\u5EFA\u7ACB\u6D41\u7A0B\uFF1A${name}`, "ok");
   });
   clearDraftButton.addEventListener("click", () => {
+    if (!draftSteps.length) return;
+    if (!confirmDelete("\u78BA\u5B9A\u8981\u6E05\u7A7A\u76EE\u524D\u6D41\u7A0B\u8349\u7A3F\u55CE\uFF1F")) return;
     draftSteps = [];
     renderDraftSteps();
     setToast("\u5DF2\u6E05\u7A7A\u6D41\u7A0B\u8349\u7A3F\u3002", "normal");

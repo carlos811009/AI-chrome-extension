@@ -110,6 +110,11 @@ body {
   font-size: 13px;
 }
 
+// Utility: classList.toggle('hidden') — must beat component rules (e.g. exec-step-response)
+.hidden {
+  display: none !important;
+}
+
 button {
   @include btn-base;
 }
@@ -832,17 +837,100 @@ select { appearance: auto; cursor: pointer; }
 //  API detail
 // ═══════════════════════════════════════════════════════
 .api-detail {
-  border: 1px solid $border-light;
-  border-radius: $radius-md;
-  padding: 12px;
-  background: $bg-canvas;
+  border: 1px solid #c7d2fe;
+  border-radius: $radius-lg;
+  background: $purple-bg;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  overflow: hidden;
 }
 
-.api-detail-name    { font-size: 12px; font-weight: 700; color: $text-primary; }
-.api-detail-purpose { font-size: 11px; color: $text-muted; }
+.api-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 12px;
+  background: linear-gradient(90deg, $primary 0%, $violet 100%);
+
+  &-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+  }
+}
+
+.api-detail-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255,255,255,.8);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  background: rgba(255,255,255,.18);
+  padding: 2px 7px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.api-detail-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.api-detail-cancel {
+  flex-shrink: 0;
+  background: rgba(255,255,255,.15);
+  color: rgba(255,255,255,.9);
+  border: 1px solid rgba(255,255,255,.3);
+  border-radius: $radius;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  &:hover { background: rgba(255,255,255,.28); color: #fff; }
+}
+
+#apiDetailPurpose {
+  padding: 0 12px;
+}
+
+.api-detail-purpose-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 6px 0 2px;
+}
+
+.api-detail-purpose-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: $text-muted;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.api-detail-purpose-input {
+  width: 100%;
+  font-size: 12px;
+  border: 1px solid $border-strong;
+  border-radius: 6px;
+  padding: 6px 9px;
+  background: $bg-white;
+  color: $text-primary;
+  box-sizing: border-box;
+  &:focus {
+    outline: none;
+    border-color: $primary;
+    box-shadow: 0 0 0 2px $primary-ring;
+  }
+}
 
 .detail-sections { display: flex; flex-direction: column; gap: 4px; }
 
@@ -966,17 +1054,52 @@ select { appearance: auto; cursor: pointer; }
 }
 
 // ── Add step button ──
+#apiDetailParams {
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 #addStep {
-  width: 100%;
+  width: calc(100% - 24px);
+  margin: 0 12px 12px;
   background: linear-gradient(90deg, $primary, $violet);
   color: #fff;
   font-size: 12px;
   font-weight: 700;
-  padding: 8px;
+  padding: 10px 8px;
   border-radius: $radius-md;
   box-shadow: 0 1px 4px rgba(79,70,229,.25);
   &:hover    { background: linear-gradient(90deg, $primary-dark, $violet-dark); }
   &.updating { background: linear-gradient(90deg, $amber, $amber-dark); }
+}
+
+// API 設定底部按鈕：上方主按鈕、下方兩顆次按鈕
+#apiDetailActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 0 12px 12px;
+
+  #addStep {
+    grid-column: 1 / -1;
+    width: 100%;
+    margin: 0;
+  }
+
+  .pending-api-save,
+  .pending-api-step {
+    font-size: 12px;
+    padding: 9px 10px;
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    line-height: 1.2;
+    white-space: normal;
+  }
 }
 
 // ── Draft steps list ──
