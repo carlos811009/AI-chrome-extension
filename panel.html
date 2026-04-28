@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Personal Workflow Assistant</title>
+    <link rel="stylesheet" href="panel.css" />
+  </head>
+  <body>
+    <main class="chat-shell">
+      <header class="chat-header">
+        <div class="chat-header-top">
+          <span class="chat-header-title">⚙ Internal API Helper</span>
+          <button id="authorizeGoogle" type="button" class="auth-btn">Google 授權</button>
+        </div>
+        <div class="chat-header-meta">
+          <p id="authStatus" class="auth-status-text"></p>
+          <pre id="oauthInfo" class="oauth-info"></pre>
+        </div>
+      </header>
+
+      <div class="panel-body">
+      <div id="toastStatus" class="toast-status hidden"></div>
+      <section class="chat-section">
+        <button id="toggleChat" class="chat-section-toggle" type="button">AI 小幫手 ▾</button>
+        <div id="chatPanel" class="chat-section-panel">
+          <section id="chatMessages" class="chat-messages" aria-live="polite"></section>
+          <div id="chatResizeHandle" class="chat-resize-handle" title="拖拉調整對話框高度"></div>
+
+          <form id="chatForm" class="chat-input-wrap">
+            <textarea id="chatInput" placeholder="例如：業務離職了，我要移除他的身份" required></textarea>
+            <div id="skillConfirm" class="skill-confirm hidden">
+              <div class="skill-confirm-text">偵測到可能可用的 skill，要優先使用 skill 回答嗎？</div>
+              <div class="skill-confirm-actions">
+                <button id="skillUse" type="button">使用 skill</button>
+                <button id="skillSkip" type="button">不使用 skill</button>
+              </div>
+            </div>
+            <div class="chat-actions">
+              <button id="sendMessage" type="submit">送出</button>
+              <button id="clearChat" type="button">清空對話</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section class="workflow-section">
+        <button id="toggleWorkflows" class="workflow-toggle" type="button">常用工作流程 ▾</button>
+        <div id="workflowPanel" class="workflow-panel">
+          <div class="sub-section">
+            <button id="toggleSavedApis" class="sub-toggle" type="button">已儲存的 API ▸</button>
+            <div id="savedApisPanel" class="sub-panel collapsed">
+              <div id="savedApisList"></div>
+            </div>
+          </div>
+
+          <div class="sub-section">
+            <button id="toggleCurlParser" class="sub-toggle" type="button">解析 Curl ▾</button>
+            <div id="curlParserPanel" class="sub-panel collapsed">
+              <textarea id="manualApiCurl" placeholder="可直接貼上 curl 指令"></textarea>
+              <button id="parseCurl" type="button">解析 curl</button>
+            </div>
+          </div>
+
+          <div class="sub-section">
+            <button id="toggleManualApi" class="sub-toggle" type="button">自訂 API ▾</button>
+            <div id="manualApiPanel" class="sub-panel collapsed">
+              <input id="manualApiName" type="text" placeholder="API 名稱（例如：MedSalesRequest）" />
+              <select id="manualApiMethod">
+                <option value="GET">GET</option>
+                <option value="POST">POST</option>
+                <option value="PUT">PUT</option>
+                <option value="PATCH">PATCH</option>
+                <option value="DELETE">DELETE</option>
+              </select>
+              <input id="manualApiPath" type="text" placeholder="API 路徑或 URL（例如：siteId/med-sales）" />
+              <div class="workflow-subtitle headers-label">HEADERS（選擇常見 Key 或自訂）</div>
+              <div id="manualApiHeadersRows" class="header-rows"></div>
+              <button id="addHeaderRow" type="button" class="header-add-row">＋ 新增 Header</button>
+              <textarea id="manualApiBody" placeholder="Body（可貼 JSON）"></textarea>
+              <input id="manualApiPurpose" type="text" placeholder="API 說明（可選）" />
+              <button id="addManualApi" type="button">加入自訂 API</button>
+              <div id="manualApiActions" class="manual-api-actions hidden"></div>
+            </div>
+          </div>
+          <div class="api-zone-label">API 清單與詳細資訊</div>
+          <div id="apiCandidates" class="api-candidates"></div>
+          <div class="api-detail">
+            <div id="apiDetailName" class="api-detail-name">尚未選擇 API</div>
+            <div id="apiDetailPurpose" class="api-detail-purpose">用途：-</div>
+            <div id="apiDetailParams" class="api-detail-params"></div>
+            <button id="addStep" type="button" class="create-workflow">加入流程步驟</button>
+          </div>
+          <div class="draft-steps-section">
+            <div class="workflow-subtitle">流程草稿（依序執行）</div>
+            <ol id="draftSteps"></ol>
+            <div class="draft-actions">
+              <button id="runWorkflow" type="button">執行流程</button>
+              <button id="saveWorkflow" type="button">儲存流程</button>
+              <button id="clearDraft" type="button">清空草稿</button>
+            </div>
+          </div>
+          <div class="sub-section">
+            <button id="toggleSavedWorkflows" class="sub-toggle" type="button">已儲存流程 ▸</button>
+            <div id="savedWorkflowsPanel" class="sub-panel collapsed">
+              <div id="savedWorkflows" class="saved-workflows"></div>
+            </div>
+          </div>
+
+          <div class="sub-section" id="executionResultSection">
+            <div class="exec-result-header">
+              <button id="toggleExecutionResult" class="sub-toggle exec-result-toggle" type="button">執行結果 ▾</button>
+              <button id="clearExecutionResult" class="exec-result-clear" type="button">清除</button>
+            </div>
+            <div id="executionResultPanel" class="sub-panel">
+              <div id="executionResultList"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+      </div><!-- /.panel-body -->
+    </main>
+    <script src="panel.js"></script>
+  </body>
+</html>

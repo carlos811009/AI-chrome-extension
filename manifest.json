@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Personal Workstation Helper",
+  "version": "1.0.0",
+  "description": "Personal workstation internal API helper",
+  "action": {
+    "default_title": "Personal Helper"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["activeTab", "scripting", "storage", "identity", "identity.email", "tabs", "clipboardWrite"],
+  "host_permissions": ["<all_urls>"],
+  "oauth2": {
+    "client_id": "700749202278-7lqnolrp21r86954cd7f3nlelv9fboti.apps.googleusercontent.com",
+    "scopes": ["openid", "email", "profile"]
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["panel.html", "panel.css", "panel.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

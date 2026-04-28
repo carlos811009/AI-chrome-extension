@@ -1,0 +1,1374 @@
+// ═══════════════════════════════════════════════════════
+//  Design Tokens
+// ═══════════════════════════════════════════════════════
+$primary:       #4f46e5;
+$primary-dark:  #4338ca;
+$primary-light: #eef2ff;
+$primary-ring:  rgba(99, 102, 241, .12);
+
+$violet:        #7c3aed;
+$violet-dark:   #6d28d9;
+
+$success:       #15803d;
+$success-bg:    #f0fdf4;
+$success-light: #dcfce7;
+$success-ring:  #bbf7d0;
+
+$danger:        #b91c1c;
+$danger-bg:     #fff0f0;
+$danger-light:  #fecaca;
+
+$amber:         #f59e0b;
+$amber-dark:    #d97706;
+$amber-bg:      #fffbeb;
+$amber-ring:    rgba(245, 158, 11, .15);
+
+$blue:          #1d4ed8;
+$blue-bg:       #eff6ff;
+$blue-light:    #dbeafe;
+$blue-ring:     #bfdbfe;
+
+$purple-bg:     #f5f3ff;
+$purple-light:  #ede9fe;
+$purple-ring:   #ddd6fe;
+$purple-text:   #6d28d9;
+
+$text-primary:  #1f2937;
+$text-sub:      #374151;
+$text-muted:    #6b7280;
+$text-faint:    #9ca3af;
+
+$border-strong: #d1d5db;
+$border:        #e2e8f0;
+$border-light:  #e5e7eb;
+$border-faint:  #f1f5f9;
+
+$bg-white:      #fff;
+$bg-canvas:     #fafafa;
+$bg-soft:       #f8fafc;
+$bg-page:       #f0f2f8;
+
+$radius-sm:     5px;
+$radius:        7px;
+$radius-md:     8px;
+$radius-lg:     10px;
+$radius-xl:     14px;
+
+$font-family:   system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+$font-mono:     ui-monospace, "Cascadia Code", "Fira Mono", monospace;
+
+// ═══════════════════════════════════════════════════════
+//  Mixins
+// ═══════════════════════════════════════════════════════
+@mixin scrollbar-thin($thumb: #a5b4fc, $track: $bg-white) {
+  scrollbar-width: thin;
+  scrollbar-color: $thumb $track;
+  &::-webkit-scrollbar       { width: 4px; }
+  &::-webkit-scrollbar-track { background: $track; }
+  &::-webkit-scrollbar-thumb { background: $thumb; border-radius: 4px; }
+}
+
+@mixin btn-base {
+  border: none;
+  border-radius: $radius-md;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-family: $font-family;
+  font-size: 12px;
+  font-weight: 600;
+  transition: background 0.15s, opacity 0.15s;
+  &:disabled { opacity: 0.45; cursor: not-allowed; }
+}
+
+@mixin input-base {
+  width: 100%;
+  border: 1px solid $border-strong;
+  border-radius: $radius;
+  padding: 6px 9px;
+  font-size: 12px;
+  font-family: $font-family;
+  color: $text-primary;
+  background: $bg-white;
+  box-sizing: border-box;
+  &:focus {
+    outline: none;
+    border-color: $primary;
+    box-shadow: 0 0 0 2px $primary-ring;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  Base Reset
+// ═══════════════════════════════════════════════════════
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: $bg-page;
+  color: $text-primary;
+  font-family: $font-family;
+  font-size: 13px;
+}
+
+button {
+  @include btn-base;
+}
+
+input, textarea, select {
+  @include input-base;
+}
+
+textarea { resize: vertical; }
+
+select { appearance: auto; cursor: pointer; }
+
+// ═══════════════════════════════════════════════════════
+//  Shell
+// ═══════════════════════════════════════════════════════
+.chat-shell {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: $bg-page;
+}
+
+// ═══════════════════════════════════════════════════════
+//  Header
+// ═══════════════════════════════════════════════════════
+.chat-header {
+  background: linear-gradient(90deg, $primary 0%, $violet 100%);
+  color: #fff;
+  padding: 10px 14px 8px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, .25);
+}
+
+.chat-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.chat-header-title {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+
+.chat-header-meta {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.auth-status-text {
+  font-size: 11px;
+  color: rgba(255, 255, 255, .85);
+  margin: 0;
+}
+
+.oauth-info {
+  font-size: 10px;
+  color: rgba(255, 255, 255, .65);
+  margin: 0;
+  font-family: $font-mono;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.auth-btn {
+  background: rgba(255, 255, 255, .15);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, .35);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: $radius-md;
+  flex-shrink: 0;
+  &:hover { background: rgba(255, 255, 255, .25); }
+  &.pulsing {
+    animation: auth-pulse 1s ease-in-out infinite;
+  }
+}
+
+@keyframes auth-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, .4); }
+  50%       { box-shadow: 0 0 0 6px rgba(255, 255, 255, 0); }
+}
+
+// ═══════════════════════════════════════════════════════
+//  Toast
+// ═══════════════════════════════════════════════════════
+.toast-status {
+  position: fixed;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: $text-primary;
+  color: #fff;
+  padding: 7px 16px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  z-index: 9999;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0,0,0,.25);
+  transition: opacity 0.3s;
+  &.hidden { display: none; }
+  &.error   { background: $danger; }
+  &.success { background: $success; }
+}
+
+// ═══════════════════════════════════════════════════════
+//  Panel Body — single column by default, 2-col when wide
+// ═══════════════════════════════════════════════════════
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  @include scrollbar-thin(#a5b4fc, $bg-page);
+
+  @media (min-width: 520px) {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "toast   toast"
+      "chat    workflow";
+    grid-template-rows: auto 1fr;
+    align-items: start;
+    gap: 10px;
+
+    #toastStatus    { grid-area: toast; }
+    .chat-section   { grid-area: chat;     overflow-y: auto; max-height: calc(100vh - 80px); }
+    .workflow-section { grid-area: workflow; overflow-y: auto; max-height: calc(100vh - 80px); border-left: 1px solid $border; border-radius: 0; }
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  Section cards
+// ═══════════════════════════════════════════════════════
+.chat-section,
+.workflow-section {
+  border-radius: $radius-lg;
+  background: $bg-white;
+  box-shadow: 0 1px 6px rgba(0,0,0,.07);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+// ── Section toggle headers ──
+.chat-section-toggle,
+.workflow-toggle {
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  background: linear-gradient(90deg, $primary 0%, $violet 100%);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  border: none;
+  border-radius: $radius-lg $radius-lg 0 0;
+  cursor: pointer;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+  &:hover { background: linear-gradient(90deg, $primary-dark, $violet-dark); }
+}
+
+// ═══════════════════════════════════════════════════════
+//  Chat panel
+// ═══════════════════════════════════════════════════════
+.chat-section-panel {
+  display: block;
+  padding: 12px;
+  flex: 1;
+  &.collapsed { display: none; }
+}
+
+.chat-messages {
+  background: $bg-canvas;
+  border: 1px solid $border-light;
+  border-radius: $radius-md $radius-md 0 0;
+  padding: 10px;
+  overflow-y: auto;
+  min-height: 80px;
+  height: 220px;
+  display: block;
+  @include scrollbar-thin(#a5b4fc, $bg-canvas);
+
+  @media (max-width: 519px) { max-height: 30vh; }
+
+  > .message-row {
+    margin-bottom: 8px;
+    &:last-child { margin-bottom: 0; }
+  }
+}
+
+// Resize handle
+.chat-resize-handle {
+  width: 100%;
+  height: 6px;
+  background: $border-light;
+  border-radius: 0 0 6px 6px;
+  cursor: ns-resize;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  &::after {
+    content: "";
+    width: 28px;
+    height: 2px;
+    background: #c7d2fe;
+    border-radius: 2px;
+  }
+  &:hover { background: #d1d5db; }
+  &:active { background: #a5b4fc; }
+}
+
+// ── Messages ──
+.message-row {
+  display: flex;
+  flex-direction: column;
+  max-width: 92%;
+  &.user     { margin-left: auto;  align-items: flex-end; }
+  &.assistant { margin-right: auto; align-items: flex-start; }
+}
+
+.message-bubble {
+  border-radius: $radius-lg;
+  padding: 8px 11px;
+  line-height: 1.55;
+  word-break: break-word;
+  font-size: 12.5px;
+
+  .message-row.user &     { background: $primary; color: #fff; }
+  .message-row.assistant & {
+    background: $primary-light;
+    color: $text-primary;
+    p, ul, ol, li { margin: 0 0 6px; }
+    p:last-child, li:last-child { margin-bottom: 0; }
+    code {
+      background: rgba(79,70,229,.08);
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-family: $font-mono;
+      font-size: 11px;
+    }
+    pre {
+      background: #1e1e2e;
+      color: #cdd6f4;
+      padding: 8px;
+      border-radius: $radius;
+      overflow-x: auto;
+      font-size: 11px;
+      margin: 4px 0;
+    }
+    strong { font-weight: 700; }
+  }
+}
+
+.message-meta {
+  margin-top: 3px;
+  font-size: 10px;
+  color: $text-faint;
+}
+
+// ── Skill confirm ──
+.skill-confirm {
+  border: 1px solid #c7d2fe;
+  border-radius: $radius;
+  background: $primary-light;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  &.hidden { display: none; }
+}
+
+.skill-confirm-text {
+  font-size: 11px;
+  color: $primary;
+  font-weight: 600;
+}
+
+.skill-confirm-actions {
+  display: flex;
+  gap: 6px;
+  #skillUse  { flex: 1; background: $primary; color: #fff; font-size: 11px; padding: 5px; }
+  #skillSkip { flex: 1; background: #f3f4f6; color: $text-sub; border: 1px solid $border; font-size: 11px; padding: 5px; }
+  #skillUse:hover  { background: $primary-dark; }
+  #skillSkip:hover { background: $border-faint; }
+}
+
+// ── Chat input form ──
+.chat-input-wrap {
+  margin-top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  #chatInput {
+    min-height: 64px;
+    max-height: 160px;
+    resize: vertical;
+    font-size: 12.5px;
+    &:disabled { background: #f9fafb; color: $text-faint; cursor: not-allowed; }
+    &::placeholder { color: $text-faint; }
+  }
+}
+
+.chat-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  #sendMessage {
+    background: linear-gradient(90deg, $primary, $violet);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 9px;
+    &:hover { background: linear-gradient(90deg, $primary-dark, $violet-dark); }
+    &:disabled { opacity: 0.45; cursor: not-allowed; }
+  }
+  #clearChat {
+    background: #f3f4f6;
+    color: $text-muted;
+    border: 1px solid $border;
+    padding: 9px 14px;
+    font-size: 12px;
+    &:hover { background: $border-faint; }
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  Workflow panel
+// ═══════════════════════════════════════════════════════
+.workflow-panel {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  &.collapsed { display: none; }
+}
+
+.workflow-subtitle {
+  font-size: 10px;
+  font-weight: 700;
+  color: $text-faint;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 2px 0 4px;
+}
+
+// ── Sub-sections (collapsible boxes) ──
+.sub-section {
+  border: 1px solid $border-light;
+  border-radius: $radius-md;
+  overflow: hidden;
+  background: $bg-white;
+}
+
+.sub-toggle {
+  width: 100%;
+  text-align: left;
+  padding: 9px 13px;
+  background: $bg-soft;
+  color: $text-sub;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+  transition: background 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  &:hover { background: $border-faint; }
+}
+
+.sub-panel {
+  padding: 10px 12px;
+  background: $bg-white;
+  border-top: 1px solid $border-faint;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+// Collapsed — must override any display set by ID selectors
+.sub-panel.collapsed,
+#manualApiPanel.sub-panel.collapsed { display: none !important; }
+
+// ═══════════════════════════════════════════════════════
+//  Execution result section header (special layout)
+// ═══════════════════════════════════════════════════════
+#executionResultSection { overflow: visible; }
+
+.exec-result-header {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: $bg-soft;
+  border-radius: $radius-md $radius-md 0 0;
+  overflow: hidden;
+  border: 1px solid $border-light;
+  border-bottom: none;
+}
+
+.exec-result-toggle {
+  flex: 1;
+  text-align: left;
+  padding: 9px 13px;
+  background: transparent;
+  color: $text-sub;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+  &:hover { background: $border-faint; }
+}
+
+.exec-result-clear {
+  font-size: 10px;
+  padding: 4px 12px;
+  background: $danger-bg;
+  color: $danger;
+  border: none;
+  border-left: 1px solid $danger-light;
+  border-radius: 0;
+  margin: 0;
+  &:hover { background: $danger-light; }
+}
+
+#executionResultPanel {
+  border: 1px solid $border-light;
+  border-top: none;
+  border-radius: 0 0 $radius-md $radius-md;
+  padding: 8px;
+  background: $bg-white;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  &.collapsed { display: none; }
+}
+
+// ═══════════════════════════════════════════════════════
+//  Curl parser sub-panel
+// ═══════════════════════════════════════════════════════
+#manualApiCurl {
+  min-height: 80px;
+  font-family: $font-mono;
+  font-size: 11px;
+  background: #1e1e2e;
+  color: #cdd6f4;
+  border-color: #3b3d5c;
+  border-radius: $radius;
+  padding: 8px;
+}
+
+#parseCurl {
+  width: 100%;
+  background: $blue-bg;
+  color: $blue;
+  border: 1px solid $blue-ring;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px;
+  border-radius: $radius;
+  &:hover { background: $blue-light; }
+}
+
+// ═══════════════════════════════════════════════════════
+//  Manual API form — CSS Grid layout
+// ═══════════════════════════════════════════════════════
+#manualApiPanel.sub-panel {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "name    method"
+    "path    path"
+    "hlabel  hlabel"
+    "hrows   hrows"
+    "hadd    hadd"
+    "body    body"
+    "purpose purpose"
+    "savebtn savebtn"
+    "actions actions";
+  gap: 7px;
+  padding: 10px 12px;
+}
+
+#manualApiName    { grid-area: name; }
+#manualApiMethod  {
+  grid-area: method;
+  width: 90px;
+  font-weight: 700;
+  color: $primary;
+  background: #f0eeff;
+  border-color: #c7d2fe;
+  padding: 5px 6px;
+  cursor: pointer;
+  appearance: auto;
+}
+#manualApiPath    { grid-area: path; }
+
+.workflow-subtitle.headers-label,
+#manualApiPanel .workflow-subtitle {
+  grid-area: hlabel;
+  font-size: 10px;
+  font-weight: 700;
+  color: $text-muted;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  margin: 0;
+  padding: 0;
+}
+
+#manualApiHeadersRows { grid-area: hrows; display: flex; flex-direction: column; gap: 4px; }
+#addHeaderRow         { grid-area: hadd; }
+#manualApiBody        { grid-area: body; min-height: 72px; }
+#manualApiPurpose     { grid-area: purpose; }
+#addManualApi         { grid-area: savebtn; }
+#manualApiActions     { grid-area: actions; }
+
+// ── Header rows in form ──
+.header-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 44px;
+  gap: 4px;
+  align-items: center;
+}
+
+.header-key-wrap {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  min-width: 0;
+}
+
+.header-key-select {
+  flex: 1;
+  padding: 4px 5px;
+  font-size: 11px;
+  border: 1px solid $border-strong;
+  border-radius: $radius-sm;
+  font-family: $font-family;
+  min-width: 0;
+  background: $bg-white;
+  color: $text-sub;
+}
+
+.header-key-custom {
+  display: none;
+  flex: 1;
+  padding: 4px 5px;
+  font-size: 11px;
+  border: 1px solid $border-strong;
+  border-radius: $radius-sm;
+  font-family: $font-family;
+  min-width: 0;
+  &.visible { display: block; }
+}
+
+.header-value {
+  padding: 4px 6px;
+  font-size: 11px;
+  border: 1px solid $border-strong;
+  border-radius: $radius-sm;
+  font-family: $font-family;
+  width: 100%;
+}
+
+.header-remove {
+  font-size: 10px;
+  padding: 3px 6px;
+  background: $danger-bg;
+  color: $danger;
+  border: 1px solid $danger-light;
+  border-radius: $radius-sm;
+  white-space: nowrap;
+}
+
+#addHeaderRow {
+  font-size: 11px;
+  padding: 5px 8px;
+  background: $bg-soft;
+  color: $text-sub;
+  border: 1px dashed $border-strong;
+  border-radius: $radius;
+  width: 100%;
+  text-align: center;
+  &:hover { background: $border-faint; border-color: $primary; color: $primary; }
+}
+
+#addManualApi {
+  width: 100%;
+  background: $primary;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px;
+  border-radius: $radius;
+  display: none;
+  &:hover { background: $primary-dark; }
+}
+
+// ── Manual API action buttons (save / add-to-step) ──
+.manual-api-actions {
+  display: flex;
+  gap: 6px;
+  &.hidden { display: none; }
+}
+
+.pending-api-save,
+.pending-api-step {
+  flex: 1;
+  font-size: 11px;
+  padding: 7px 8px;
+  border-radius: $radius;
+  font-weight: 600;
+}
+
+.pending-api-save {
+  background: $success-bg;
+  color: $success;
+  border: 1px solid $success-ring;
+  &:hover { background: $success-light; }
+}
+
+.pending-api-step {
+  background: $primary-light;
+  color: $primary-dark;
+  border: 1px solid #c7d2fe;
+  &:hover { background: #e0e7ff; }
+}
+
+// ── Field validation ──
+.field-error {
+  border-color: #ef4444 !important;
+  background: #fff5f5 !important;
+}
+
+.field-error-hint {
+  font-size: 10px;
+  color: #ef4444;
+  margin-top: 1px;
+}
+
+// ═══════════════════════════════════════════════════════
+//  API zone label
+// ═══════════════════════════════════════════════════════
+.api-zone-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: $text-faint;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+// ═══════════════════════════════════════════════════════
+//  API candidates list
+// ═══════════════════════════════════════════════════════
+.api-candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 190px;
+  overflow-y: auto;
+  @include scrollbar-thin;
+
+  .api-candidate-wrap {
+    display: flex;
+    align-items: stretch;
+    gap: 4px;
+  }
+
+  .api-candidate {
+    flex: 1;
+    text-align: left;
+    padding: 7px 10px;
+    background: $bg-soft;
+    border: 1px solid $border;
+    border-radius: $radius;
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    transition: all 0.1s;
+    &:hover  { background: $primary-light; border-color: #a5b4fc; }
+    &.active { background: $primary-light; border-color: $primary; color: $primary-dark; box-shadow: 0 0 0 2px $primary-ring; }
+  }
+
+  .api-candidate-name    { font-weight: 700; font-size: 11px; }
+  .api-candidate-purpose { font-size: 10px; color: $text-muted; }
+
+  .api-candidate-remove,
+  .api-candidate-save {
+    font-size: 10px;
+    padding: 0 6px;
+    border-radius: $radius;
+    align-self: center;
+    flex-shrink: 0;
+    height: 100%;
+    display: flex;
+    align-items: center;
+  }
+
+  .api-candidate-remove { background: $danger-bg;  color: $danger;  border: 1px solid $danger-light; }
+  .api-candidate-save   { background: $success-bg; color: $success; border: 1px solid $success-ring; }
+}
+
+// ═══════════════════════════════════════════════════════
+//  API detail
+// ═══════════════════════════════════════════════════════
+.api-detail {
+  border: 1px solid $border-light;
+  border-radius: $radius-md;
+  padding: 12px;
+  background: $bg-canvas;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.api-detail-name    { font-size: 12px; font-weight: 700; color: $text-primary; }
+.api-detail-purpose { font-size: 11px; color: $text-muted; }
+
+.detail-sections { display: flex; flex-direction: column; gap: 4px; }
+
+.detail-url-code {
+  font-size: 10px;
+  background: #1e1e2e;
+  color: #a6e3a1;
+  border-radius: $radius-sm;
+  padding: 5px 8px;
+  word-break: break-all;
+  font-family: $font-mono;
+  border: 1px solid #2e2e3e;
+}
+
+.detail-section {
+  border: 1px solid $border;
+  border-radius: $radius;
+  overflow: hidden;
+}
+
+.detail-section-toggle {
+  width: 100%;
+  text-align: left;
+  padding: 5px 9px;
+  background: $bg-soft;
+  color: $text-sub;
+  font-size: 11px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: background 0.1s;
+  &:hover { background: $border-faint; }
+}
+
+.detail-section-body {
+  padding: 6px;
+  background: $bg-white;
+  border-top: 1px solid $border-faint;
+  &.collapsed { display: none; }
+}
+
+.detail-edit-list { display: flex; flex-direction: column; gap: 4px; }
+
+.detail-edit-row {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 5px;
+  align-items: center;
+  &:has(.detail-edit-key-input) {
+    grid-template-columns: 1fr 1fr 32px;
+  }
+}
+
+.detail-edit-key {
+  font-size: 10px;
+  font-weight: 700;
+  color: $text-muted;
+}
+
+.detail-edit-input,
+.detail-edit-key-input,
+.detail-edit-val-input {
+  font-size: 11px;
+  border: 1px solid $border;
+  border-radius: $radius-sm;
+  padding: 4px 7px;
+  font-family: $font-family;
+  width: 100%;
+  background: $bg-white;
+  color: $text-primary;
+  &:focus {
+    border-color: $primary;
+    box-shadow: 0 0 0 2px $primary-ring;
+    outline: none;
+  }
+}
+
+.detail-add-row-btn {
+  width: 100%;
+  margin-top: 4px;
+  font-size: 10px;
+  padding: 4px 8px;
+  background: $bg-soft;
+  color: $text-sub;
+  border: 1px dashed $border-strong;
+  border-radius: $radius-sm;
+  text-align: center;
+  &:hover { background: $border-faint; border-color: $primary; color: $primary; }
+}
+
+.detail-edit-body {
+  width: 100%;
+  min-height: 60px;
+  font-size: 11px;
+  border: 1px solid $border;
+  border-radius: $radius-sm;
+  padding: 4px 7px;
+  resize: vertical;
+  font-family: $font-mono;
+}
+
+.detail-empty { font-size: 11px; color: $text-faint; padding: 2px 0; }
+
+// ═══════════════════════════════════════════════════════
+//  Draft steps section wrapper
+// ═══════════════════════════════════════════════════════
+.draft-steps-section {
+  border: 1px solid $border-light;
+  border-radius: $radius-md;
+  padding: 12px;
+  background: $bg-white;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  .workflow-subtitle {
+    color: $text-muted;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+// ── Add step button ──
+#addStep {
+  width: 100%;
+  background: linear-gradient(90deg, $primary, $violet);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px;
+  border-radius: $radius-md;
+  box-shadow: 0 1px 4px rgba(79,70,229,.25);
+  &:hover    { background: linear-gradient(90deg, $primary-dark, $violet-dark); }
+  &.updating { background: linear-gradient(90deg, $amber, $amber-dark); }
+}
+
+// ── Draft steps list ──
+#draftSteps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.draft-step-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px;
+  background: $bg-soft;
+  border: 1px solid $border;
+  border-radius: $radius-md;
+  transition: border-color 0.15s;
+  &.editing { border-color: $amber; background: $amber-bg; }
+}
+
+.draft-step-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.draft-step-num     { font-size: 10px; color: $text-faint; }
+.draft-step-title   { font-size: 12px; font-weight: 700; color: $text-primary; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.draft-step-purpose { font-size: 10px; color: $text-muted; }
+
+.draft-step-actions { display: flex; gap: 4px; flex-shrink: 0; }
+
+.draft-step-edit {
+  font-size: 10px;
+  padding: 3px 8px;
+  background: $primary-light;
+  color: $primary-dark;
+  border: 1px solid #c7d2fe;
+  border-radius: $radius-sm;
+}
+
+.draft-step-delete {
+  font-size: 10px;
+  padding: 3px 8px;
+  background: $danger-bg;
+  color: $danger;
+  border: 1px solid $danger-light;
+  border-radius: $radius-sm;
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+}
+
+// ── Draft action buttons (3-column grid) ──
+.draft-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
+
+#runWorkflow  { background: $primary; color: #fff; font-weight: 700; font-size: 11px; padding: 8px 4px; &:hover { background: $primary-dark; } }
+#saveWorkflow { background: $success-bg; color: $success; border: 1px solid $success-ring; font-size: 11px; padding: 8px 4px; &:hover { background: $success-light; } }
+#clearDraft   { background: #f3f4f6; color: $text-muted; border: 1px solid $border; font-size: 11px; padding: 8px 4px; &:hover { background: $border-light; } }
+
+// ═══════════════════════════════════════════════════════
+//  Saved workflows
+// ═══════════════════════════════════════════════════════
+.saved-workflows { display: flex; flex-direction: column; gap: 5px; }
+
+.workflow-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid $border;
+  border-radius: $radius-md;
+  background: $bg-canvas;
+  transition: border-color 0.15s;
+  &:hover { border-color: #a5b4fc; background: $purple-bg; }
+}
+
+.workflow-card-name {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 700;
+  color: $text-primary;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workflow-card-steps { font-size: 10px; color: $text-muted; flex-shrink: 0; }
+
+.workflow-card-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  button {
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: $radius-sm;
+    background: $border-faint;
+    color: $text-sub;
+    border: 1px solid $border;
+    &:hover { background: #e0e7ff; color: $primary; border-color: #c7d2fe; }
+  }
+}
+
+.workflow-card-delete {
+  background: $danger-bg !important;
+  color: $danger !important;
+  border: 1px solid $danger-light !important;
+  &:hover { background: $danger-light !important; }
+}
+
+// ═══════════════════════════════════════════════════════
+//  Saved APIs
+// ═══════════════════════════════════════════════════════
+.saved-api-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid $border;
+  border-radius: $radius-md;
+  background: $bg-canvas;
+  transition: border-color 0.15s, background 0.15s;
+
+  &.selected {
+    border-color: $primary;
+    background: $primary-light;
+    box-shadow: 0 0 0 2px $primary-ring;
+  }
+
+  &.editing {
+    border-color: $amber;
+    background: $amber-bg;
+    box-shadow: 0 0 0 2px $amber-ring;
+  }
+}
+
+.saved-api-info { flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+
+.saved-api-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: $text-primary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.saved-api-purpose {
+  font-size: 10px;
+  color: $text-muted;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.saved-api-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  button {
+    font-size: 10px;
+    padding: 3px 8px;
+    background: $border-faint;
+    color: $text-sub;
+    border: 1px solid $border;
+    border-radius: $radius-sm;
+    &.active { background: $primary; color: #fff; border-color: $primary; }
+  }
+
+  .saved-api-card.editing & button:not(.saved-api-delete) {
+    background: $amber;
+    color: #fff;
+    border-color: $amber;
+  }
+}
+
+.saved-api-delete {
+  background: $danger-bg !important;
+  color: $danger !important;
+  border: 1px solid $danger-light !important;
+  &:hover { background: $danger-light !important; }
+}
+
+// ═══════════════════════════════════════════════════════
+//  Execution results
+// ═══════════════════════════════════════════════════════
+.exec-workflow-block {
+  border: 1px solid $border;
+  border-radius: $radius-md;
+  overflow: hidden;
+  background: $bg-white;
+}
+
+.exec-workflow-toggle {
+  width: 100%;
+  text-align: left;
+  padding: 8px 11px;
+  background: $bg-soft;
+  font-size: 11px;
+  font-weight: 700;
+  color: $text-sub;
+  border: none;
+  cursor: pointer;
+  transition: background 0.1s;
+  &:hover { background: $border-faint; }
+}
+
+.exec-workflow-steps {
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  &.collapsed { display: none; }
+}
+
+.exec-step-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 11px;
+  border: 1px solid $border;
+  border-radius: $radius;
+  background: $bg-canvas;
+  &.ok    { border-color: $success-ring; background: $success-bg; }
+  &.error { border-color: $danger-light; background: $danger-bg; }
+}
+
+.exec-step-left {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.exec-step-icon { font-size: 13px; flex-shrink: 0; }
+
+@keyframes spin-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+
+.exec-step-icon.running { animation: spin-pulse 1s ease-in-out infinite; }
+
+.exec-step-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: $text-primary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.exec-step-status-text {
+  font-size: 10px;
+  color: $text-muted;
+  flex-shrink: 0;
+  background: $border-faint;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.exec-step-actions { display: flex; gap: 4px; flex-shrink: 0; }
+
+.exec-view-btn,
+.exec-copy-btn,
+.exec-save-api-btn {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: $radius-sm;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.exec-view-btn     { background: $blue-bg;    color: $blue;         border: 1px solid $blue-ring;   &:hover { background: $blue-light; } }
+.exec-copy-btn     { background: $purple-bg;  color: $purple-text;  border: 1px solid $purple-ring; &:hover { background: $purple-light; } }
+.exec-save-api-btn { background: $success-bg; color: $success;      border: 1px solid $success-ring; &:hover { background: $success-light; } &:disabled { opacity: 0.5; cursor: not-allowed; } }
+
+.exec-step-response {
+  width: 100%;
+  max-height: 240px;
+  overflow-y: auto;
+  background: #1e1e2e;
+  color: #cdd6f4;
+  font-size: 10px;
+  padding: 8px;
+  border-radius: $radius;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: $font-mono;
+  @include scrollbar-thin(#6366f1, #1e1e2e);
+  margin-top: 2px;
+}
+
+// ═══════════════════════════════════════════════════════
+//  Pre-execution confirm dialog
+// ═══════════════════════════════════════════════════════
+.exec-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.5);
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.exec-confirm-dialog {
+  background: $bg-white;
+  border-radius: $radius-xl;
+  padding: 18px;
+  width: min(94vw, 420px);
+  max-height: 80vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.25);
+}
+
+.exec-confirm-title    { font-size: 14px; font-weight: 800; color: $text-primary; }
+.exec-confirm-subtitle { font-size: 11px; color: $text-muted; }
+.exec-confirm-steps    { display: flex; flex-direction: column; gap: 8px; }
+
+.exec-confirm-step {
+  border: 1px solid $border;
+  border-radius: 9px;
+  padding: 9px;
+}
+
+.exec-confirm-step-name { font-size: 12px; font-weight: 700; color: $text-primary; margin-bottom: 6px; }
+.exec-confirm-label     { font-size: 10px; font-weight: 700; color: $text-muted; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 3px; }
+
+.exec-confirm-params     { display: flex; flex-direction: column; gap: 3px; margin-bottom: 6px; }
+.exec-confirm-param-row  { display: flex; gap: 4px; align-items: center; }
+.exec-confirm-param-key  { font-size: 10px; font-weight: 700; color: $text-muted; min-width: 64px; flex-shrink: 0; }
+.exec-confirm-param-value {
+  flex: 1;
+  font-size: 11px;
+  border: 1px solid $border-strong;
+  border-radius: $radius-sm;
+  padding: 3px 7px;
+  font-family: $font-family;
+}
+
+.exec-confirm-body {
+  width: 100%;
+  min-height: 60px;
+  font-size: 11px;
+  border: 1px solid $border-strong;
+  border-radius: $radius;
+  padding: 5px 7px;
+  resize: vertical;
+  font-family: $font-mono;
+}
+
+.exec-confirm-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.exec-confirm-cancel {
+  flex: 1;
+  background: #f3f4f6;
+  color: $text-sub;
+  border: 1px solid $border;
+  padding: 9px;
+  border-radius: $radius-md;
+  font-weight: 600;
+  &:hover { background: $border-light; }
+}
+
+.exec-confirm-ok {
+  flex: 2;
+  background: linear-gradient(90deg, $primary, $violet);
+  color: #fff;
+  font-weight: 700;
+  padding: 9px;
+  border-radius: $radius-md;
+  &:hover { background: linear-gradient(90deg, $primary-dark, $violet-dark); }
+}

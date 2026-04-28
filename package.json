@@ -1,0 +1,14 @@
+{
+  "name": "personal-extension",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:css": "node scripts/build-css.mjs"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "esbuild": "^0.25.9",
+    "sass": "^1.93.2"
+  }
+}
