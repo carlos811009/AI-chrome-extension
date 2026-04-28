@@ -1,4 +1,6 @@
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
@@ -6,7 +8,12 @@ body {
   margin: 0;
   background: #f0f2f8;
   color: #1f2937;
-  font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Arial,
+    sans-serif;
   font-size: 13px;
 }
 
@@ -19,28 +26,44 @@ button {
   border-radius: 8px;
   padding: 8px 12px;
   cursor: pointer;
-  font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Arial,
+    sans-serif;
   font-size: 12px;
   font-weight: 600;
-  transition: background 0.15s, opacity 0.15s;
+  transition:
+    background 0.15s,
+    opacity 0.15s;
 }
 button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
 
-input, textarea, select {
+input,
+textarea,
+select {
   width: 100%;
   border: 1px solid #d1d5db;
   border-radius: 7px;
   padding: 6px 9px;
   font-size: 12px;
-  font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Arial,
+    sans-serif;
   color: #1f2937;
   background: #fff;
   box-sizing: border-box;
 }
-input:focus, textarea:focus, select:focus {
+input:focus,
+textarea:focus,
+select:focus {
   outline: none;
   border-color: #4f46e5;
   box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.12);
@@ -125,7 +148,8 @@ select {
 }
 
 @keyframes auth-pulse {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4);
   }
   50% {
@@ -332,10 +356,14 @@ select {
   background: #eef2ff;
   color: #1f2937;
 }
-.message-row.assistant .message-bubble p, .message-row.assistant .message-bubble ul, .message-row.assistant .message-bubble ol, .message-row.assistant .message-bubble li {
+.message-row.assistant .message-bubble p,
+.message-row.assistant .message-bubble ul,
+.message-row.assistant .message-bubble ol,
+.message-row.assistant .message-bubble li {
   margin: 0 0 6px;
 }
-.message-row.assistant .message-bubble p:last-child, .message-row.assistant .message-bubble li:last-child {
+.message-row.assistant .message-bubble p:last-child,
+.message-row.assistant .message-bubble li:last-child {
   margin-bottom: 0;
 }
 .message-row.assistant .message-bubble code {
@@ -692,7 +720,12 @@ select {
   font-size: 11px;
   border: 1px solid #d1d5db;
   border-radius: 5px;
-  font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Arial,
+    sans-serif;
   min-width: 0;
   background: #fff;
   color: #374151;
@@ -705,7 +738,12 @@ select {
   font-size: 11px;
   border: 1px solid #d1d5db;
   border-radius: 5px;
-  font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Arial,
+    sans-serif;
   min-width: 0;
 }
 .header-key-custom.visible {
@@ -717,7 +755,12 @@ select {
   font-size: 11px;
   border: 1px solid #d1d5db;
   border-radius: 5px;
-  font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Arial,
+    sans-serif;
   width: 100%;
 }
 
@@ -1068,7 +1111,12 @@ select {
   border: 1px solid #e2e8f0;
   border-radius: 5px;
   padding: 4px 7px;
-  font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Arial,
+    sans-serif;
   width: 100%;
   background: #fff;
   color: #1f2937;
@@ -1371,7 +1419,9 @@ select {
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   background: #fafafa;
-  transition: border-color 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
 }
 .saved-api-card.selected {
   border-color: #4f46e5;
@@ -1508,7 +1558,8 @@ select {
 }
 
 @keyframes spin-pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
@@ -1703,7 +1754,12 @@ select {
   border: 1px solid #d1d5db;
   border-radius: 5px;
   padding: 3px 7px;
-  font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Arial,
+    sans-serif;
 }
 
 .exec-confirm-body {
