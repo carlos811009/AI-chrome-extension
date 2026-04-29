@@ -3,6 +3,8 @@
   const STORAGE_KEY = "chatMessages";
   const SESSION_ID_KEY = "chatSessionId";
   const WORKFLOWS_KEY = "savedWorkflows";
+  const WORKFLOW_EXPORT_FORMAT = "personal-extension-workflow";
+  const WORKFLOW_EXPORT_VERSION = 1;
   const EXEC_RESULTS_KEY = "execResults";
   const AUTH_STATE_KEY = "authState";
   const CUSTOM_APIS_KEY = "customApis";
@@ -62,6 +64,7 @@
   const runWorkflowButton = document.getElementById("runWorkflow");
   const saveWorkflowButton = document.getElementById("saveWorkflow");
   const clearDraftButton = document.getElementById("clearDraft");
+  const draftWorkflowNameInputEl = document.getElementById("draftWorkflowName");
   const savedWorkflowsEl = document.getElementById("savedWorkflows");
   const toggleSavedApisButton = document.getElementById("toggleSavedApis");
   const savedApisPanelEl = document.getElementById("savedApisPanel");
@@ -74,6 +77,10 @@
   const executionResultListEl = document.getElementById("executionResultList");
   const clearExecutionResultButton = document.getElementById("clearExecutionResult");
   const panelBodyEl = document.querySelector(".panel-body");
+  const exportDraftWorkflowJsonButton = document.getElementById("exportDraftWorkflowJson");
+  const copyDraftWorkflowJsonButton = document.getElementById("copyDraftWorkflowJson");
+  const importWorkflowJsonInputEl = document.getElementById("importWorkflowJsonInput");
+  const importWorkflowToDraftButton = document.getElementById("importWorkflowToDraft");
   const MAX_EXEC_RESULTS = 10;
   let execResults = [];
   let messages = [];
@@ -100,6 +107,7 @@
   let editingStepIndex = -1;
   let editingApiIndex = -1;
   let currentWorkflowName = "";
+  let draftNameFromImport = false;
   const fallbackStorage = /* @__PURE__ */ new Map();
   const extensionChrome = typeof chrome !== "undefined" ? chrome : void 0;
   function isAuthStateValid(state) {
@@ -1051,6 +1059,282 @@
     const selectedSpec = selectedApiIndex >= 0 ? allCandidates[selectedApiIndex] || null : pinnedDetailSpec;
     renderApiDetail(selectedSpec || null);
   }
+  function isSensitiveShareHeaderKey(key) {
+    const k = key.trim().toLowerCase();
+    if (k === "authorization" || k === "cookie") return true;
+    if (k === "x-api-key" || k.endsWith("api-key")) return true;
+    return false;
+  }
+  function sanitizeHeadersForShare(headers) {
+    if (!headers) return {};
+    const out = {};
+    for (const [k, v] of Object.entries(headers)) {
+      if (isSensitiveShareHeaderKey(k)) continue;
+      out[k] = v;
+    }
+    return out;
+  }
+  function sanitizeStepForShare(step) {
+    return {
+      ...step,
+      params: [...step.params ?? []],
+      headers: sanitizeHeadersForShare(step.headers),
+      bearerToken: ""
+    };
+  }
+  function normalizeWorkflowRequestTarget(raw) {
+    const t = raw.trim();
+    if (!t) return "";
+    if (/^https?:\/\//i.test(t)) {
+      try {
+        const u = new URL(t);
+        const p = u.pathname.replace(/\/+$/, "") || "/";
+        return p.toLowerCase();
+      } catch {
+        return t.toLowerCase();
+      }
+    }
+    return t.replace(/^\/+/, "").replace(/\/+$/, "").toLowerCase();
+  }
+  function workflowStepSignature(step) {
+    const method = (step.method || "GET").toUpperCase();
+    const raw = step.path && step.path.trim() || (step.api || "").trim();
+    return `${method}:${normalizeWorkflowRequestTarget(raw)}`;
+  }
+  function findSavedWorkflowWithSameSignature(steps) {
+    if (!steps.length) return null;
+    const sig = steps.map(workflowStepSignature).join("\n");
+    for (const w of savedWorkflows) {
+      if (!w.steps.length) continue;
+      if (w.steps.map(workflowStepSignature).join("\n") === sig) return w;
+    }
+    return null;
+  }
+  function workflowStepsHaveAbsoluteUrl(steps) {
+    return steps.some((s) => {
+      const t = s.path && s.path.trim() || (s.api || "").trim();
+      return /^https?:\/\//i.test(t);
+    });
+  }
+  function buildWorkflowExportJson(workflowName, steps) {
+    const envelope = {
+      format: WORKFLOW_EXPORT_FORMAT,
+      version: WORKFLOW_EXPORT_VERSION,
+      exportedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      workflow: {
+        name: workflowName.trim() || "\u672A\u547D\u540D\u6D41\u7A0B",
+        steps: steps.map(sanitizeStepForShare)
+      }
+    };
+    return `${JSON.stringify(envelope, null, 2)}
+`;
+  }
+  async function copyWorkflowJsonToClipboard(json) {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(json);
+        return true;
+      }
+    } catch {
+    }
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = json;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+  function downloadWorkflowJsonFile(filename, json) {
+    const safe = filename.replace(/[^\w\u4e00-\u9fff.-]+/g, "_").slice(0, 80) || "workflow";
+    const blob = new Blob([json], { type: "application/json;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${safe}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  function parseWorkflowStepFromImport(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const o = raw;
+    const apiRaw = typeof o.api === "string" ? o.api.trim() : "";
+    const pathRaw = typeof o.path === "string" ? o.path.trim() : "";
+    const target = pathRaw || apiRaw;
+    if (!target) return null;
+    const purpose = typeof o.purpose === "string" ? o.purpose.trim() : "\u532F\u5165\u6D41\u7A0B\u6B65\u9A5F";
+    const params = Array.isArray(o.params) ? o.params.map((p) => String(p).trim()).filter(Boolean) : [];
+    const methodRaw = typeof o.method === "string" ? o.method.trim().toUpperCase() : "";
+    const method = methodRaw || "GET";
+    let headers = {};
+    if (o.headers && typeof o.headers === "object" && !Array.isArray(o.headers)) {
+      for (const [k, v] of Object.entries(o.headers)) {
+        if (typeof v === "string") headers[k] = v;
+      }
+    }
+    headers = sanitizeHeadersForShare(headers);
+    const bodyTemplate = typeof o.bodyTemplate === "string" ? o.bodyTemplate : "";
+    const requestName = typeof o.requestName === "string" ? o.requestName.trim() : void 0;
+    return {
+      api: apiRaw || pathRaw,
+      path: pathRaw || void 0,
+      requestName,
+      method: method || "GET",
+      headers,
+      bodyTemplate,
+      bearerToken: "",
+      purpose: purpose || "\u532F\u5165\u6D41\u7A0B\u6B65\u9A5F",
+      params
+    };
+  }
+  function parseWorkflowImportJson(text) {
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      return { ok: false, error: "\u4E0D\u662F\u6709\u6548\u7684 JSON\u3002" };
+    }
+    if (!parsed || typeof parsed !== "object") {
+      return { ok: false, error: "JSON \u6839\u7BC0\u9EDE\u5FC5\u9808\u70BA\u7269\u4EF6\u3002" };
+    }
+    const root = parsed;
+    if (root.format !== WORKFLOW_EXPORT_FORMAT) {
+      return { ok: false, error: `\u7F3A\u5C11\u6216\u7121\u6548\u7684 format\uFF08\u9808\u70BA\u300C${WORKFLOW_EXPORT_FORMAT}\u300D\uFF09\u3002` };
+    }
+    const version = typeof root.version === "number" ? root.version : Number(root.version);
+    if (version !== WORKFLOW_EXPORT_VERSION) {
+      return { ok: false, error: `\u4E0D\u652F\u63F4\u7684\u7248\u672C\uFF1A${String(root.version)}\uFF08\u76EE\u524D\u50C5\u652F\u63F4 ${WORKFLOW_EXPORT_VERSION}\uFF09\u3002` };
+    }
+    const wf = root.workflow;
+    if (!wf || typeof wf !== "object") {
+      return { ok: false, error: "\u7F3A\u5C11 workflow \u7269\u4EF6\u3002" };
+    }
+    const wfo = wf;
+    const name = typeof wfo.name === "string" ? wfo.name.trim() : "";
+    const stepsRaw = wfo.steps;
+    if (!Array.isArray(stepsRaw) || !stepsRaw.length) {
+      return { ok: false, error: "workflow.steps \u5FC5\u9808\u70BA\u975E\u7A7A\u9663\u5217\u3002" };
+    }
+    const steps = [];
+    for (let i = 0; i < stepsRaw.length; i += 1) {
+      const step = parseWorkflowStepFromImport(stepsRaw[i]);
+      if (!step) return { ok: false, error: `\u7B2C ${i + 1} \u6B65\u683C\u5F0F\u4E0D\u6B63\u78BA\uFF08\u9700\u6709 path \u6216 api\uFF09\u3002` };
+      steps.push(step);
+    }
+    return { ok: true, steps, name };
+  }
+  function defaultImportedWorkflowName(suggested) {
+    const base = suggested.trim();
+    if (base) return base;
+    const ts = (/* @__PURE__ */ new Date()).toLocaleString("zh-Hant-TW", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+    return `\u532F\u5165\u6D41\u7A0B ${ts}`;
+  }
+  function findSavedWorkflowWithDuplicateName(name) {
+    const n = name.trim();
+    if (!n) return null;
+    return savedWorkflows.find((w) => w.name.trim() === n) ?? null;
+  }
+  function showWorkflowImportConfirmDialog(info) {
+    return new Promise((resolve) => {
+      const overlay = document.createElement("div");
+      overlay.className = "exec-confirm-overlay";
+      const dialog = document.createElement("div");
+      dialog.className = "exec-confirm-dialog";
+      const titleEl = document.createElement("div");
+      titleEl.className = "exec-confirm-title";
+      titleEl.textContent = "\u532F\u5165\u6D41\u7A0B\u81F3\u8349\u7A3F";
+      const intro = document.createElement("div");
+      intro.className = "exec-confirm-subtitle";
+      intro.textContent = `\u5C07\u8F09\u5165\u300C${info.draftName}\u300D\uFF0C\u5171 ${info.stepCount} \u500B\u6B65\u9A5F\uFF0C\u4E26\u8986\u5BEB\u76EE\u524D\u8349\u7A3F\u3002`;
+      const showProminentAlerts = Boolean(info.duplicateName || info.similar);
+      let alertBanner = null;
+      if (showProminentAlerts) {
+        alertBanner = document.createElement("div");
+        alertBanner.className = "workflow-import-alert-banner";
+        const bannerTitle = document.createElement("div");
+        bannerTitle.className = "workflow-import-alert-title";
+        bannerTitle.textContent = "\u8ACB\u7559\u610F\uFF1A\u8207\u73FE\u6709\u6D41\u7A0B\u91CD\u758A";
+        alertBanner.appendChild(bannerTitle);
+        if (info.duplicateName && info.similar && info.duplicateName.id === info.similar.id) {
+          const row = document.createElement("div");
+          row.className = "workflow-import-alert-item workflow-import-alert-item--both";
+          row.textContent = `\u8207\u5DF2\u5132\u5B58\u6D41\u7A0B\u300C${info.similar.name}\u300D\u540C\u540D\uFF0C\u4E14\u6BCF\u6B65 HTTP \u65B9\u6CD5 + \u6B63\u898F\u5316\u8DEF\u5F91\u5E8F\u5217\u5B8C\u5168\u76F8\u540C\uFF0C\u6975\u53EF\u80FD\u70BA\u540C\u4E00\u689D\u6D41\u7A0B\u3002`;
+          alertBanner.appendChild(row);
+        } else {
+          if (info.duplicateName) {
+            const row = document.createElement("div");
+            row.className = "workflow-import-alert-item workflow-import-alert-item--duplicate";
+            row.textContent = `\u5DF2\u6709\u5DF2\u5132\u5B58\u6D41\u7A0B\u4F7F\u7528\u76F8\u540C\u540D\u7A31\u300C${info.draftName}\u300D\uFF08\u8207\u300C${info.duplicateName.name}\u300D\u540C\u540D\uFF09\uFF0C\u532F\u5165\u5F8C\u8349\u7A3F\u540D\u7A31\u4E5F\u6703\u76F8\u540C\uFF0C\u5EFA\u8B70\u532F\u5165\u5F8C\u6539\u540D\u518D\u5132\u5B58\u3002`;
+            alertBanner.appendChild(row);
+          }
+          if (info.similar) {
+            const row = document.createElement("div");
+            row.className = "workflow-import-alert-item workflow-import-alert-item--similar";
+            row.textContent = `\u6B65\u9A5F\u8DEF\u5F91\u8207\u300C${info.similar.name}\u300D\u5B8C\u5168\u76F8\u540C\uFF08\u6BCF\u6B65 HTTP \u65B9\u6CD5 + \u6B63\u898F\u5316\u8DEF\u5F91\u5E8F\u5217\u4E00\u81F4\uFF09\uFF0C\u53EF\u80FD\u8207\u8A72\u6D41\u7A0B\u91CD\u8907\u3002`;
+            alertBanner.appendChild(row);
+          }
+        }
+      }
+      const list = document.createElement("ul");
+      list.className = "workflow-import-confirm-list";
+      const liAuth = document.createElement("li");
+      liAuth.textContent = "\u6B64 JSON \u4E0D\u542B Authorization\u3001API Key\u3001Cookie \u7B49\u654F\u611F Header\uFF1B\u82E5 API \u9700\u8981\uFF0C\u8ACB\u532F\u5165\u5F8C\u5728\u5404\u6B65\u9A5F\u7684 API \u8A2D\u5B9A\u4E2D\u81EA\u884C\u88DC\u4E0A\u3002";
+      list.appendChild(liAuth);
+      if (info.hasAbsoluteUrl) {
+        const liUrl = document.createElement("li");
+        liUrl.textContent = "\u5075\u6E2C\u5230\u5B8C\u6574 URL\uFF08\u542B http/https\uFF09\uFF1A\u8ACB\u78BA\u8A8D\u8207\u4F60\u76EE\u524D\u7684\u74B0\u5883\u4E00\u81F4\uFF0C\u5FC5\u8981\u6642\u8ACB\u6539\u70BA\u76F8\u5C0D path \u6216\u6B63\u78BA\u7684\u7DB2\u5740\u3002";
+        list.appendChild(liUrl);
+      }
+      const actions = document.createElement("div");
+      actions.className = "exec-confirm-actions";
+      const cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.className = "exec-confirm-cancel";
+      cancelBtn.textContent = "\u53D6\u6D88";
+      const okBtn = document.createElement("button");
+      okBtn.type = "button";
+      okBtn.className = "exec-confirm-ok";
+      okBtn.textContent = "\u4ECD\u532F\u5165";
+      function close(ok) {
+        overlay.remove();
+        resolve(ok);
+      }
+      cancelBtn.addEventListener("click", () => close(false));
+      okBtn.addEventListener("click", () => close(true));
+      overlay.addEventListener("click", (e) => {
+        if (e.target === overlay) close(false);
+      });
+      actions.appendChild(cancelBtn);
+      actions.appendChild(okBtn);
+      dialog.appendChild(titleEl);
+      dialog.appendChild(intro);
+      if (alertBanner) dialog.appendChild(alertBanner);
+      dialog.appendChild(list);
+      dialog.appendChild(actions);
+      overlay.appendChild(dialog);
+      document.body.appendChild(overlay);
+    });
+  }
+  function getDraftWorkflowDisplayName() {
+    const fromInput = draftWorkflowNameInputEl.value.trim();
+    if (fromInput) return fromInput;
+    return (currentWorkflowName || "").trim() || "\u8349\u7A3F";
+  }
+  function syncDraftWorkflowNameInputFromState() {
+    draftWorkflowNameInputEl.value = currentWorkflowName;
+  }
   function renderDraftSteps() {
     draftStepsEl.replaceChildren();
     if (!draftSteps.length) {
@@ -1152,6 +1436,8 @@
           headers: step.headers ? { ...step.headers } : {}
         }));
         currentWorkflowName = workflow.name;
+        syncDraftWorkflowNameInputFromState();
+        draftNameFromImport = false;
         renderDraftSteps();
         setWorkflowPanelOpen(true);
         setToast(`\u5DF2\u8F09\u5165\u6D41\u7A0B\uFF1A${workflow.name}`, "ok");
@@ -1971,7 +2257,7 @@
       notifyAuthExpired();
       return;
     }
-    const workflowName = currentWorkflowName || "\u8349\u7A3F";
+    const workflowName = getDraftWorkflowDisplayName();
     const timestamp = (/* @__PURE__ */ new Date()).toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" });
     const block = document.createElement("div");
     block.className = "exec-workflow-block";
@@ -2537,9 +2823,19 @@
       setToast("\u6D41\u7A0B\u8349\u7A3F\u662F\u7A7A\u7684\uFF0C\u8ACB\u5148\u52A0\u5165 API\u3002", "error");
       return;
     }
-    const defaultName = `\u6D41\u7A0B${savedWorkflows.length + 1}`;
-    const name = (globalThis.prompt("\u8ACB\u8F38\u5165\u6D41\u7A0B\u540D\u7A31", defaultName) || "").trim();
-    if (!name) return;
+    const name = draftWorkflowNameInputEl.value.trim();
+    if (!name) {
+      const msg = draftNameFromImport ? "\u8ACB\u586B\u5BEB\u6D41\u7A0B\u540D\u7A31\u5F8C\u518D\u5132\u5B58\u3002" : "\u8ACB\u586B\u5BEB\u6D41\u7A0B\u540D\u7A31\uFF08\u81EA\u884C\u5EFA\u7ACB\u7684\u8349\u7A3F\u70BA\u5FC5\u586B\uFF09\u3002";
+      setToast(msg, "error");
+      draftWorkflowNameInputEl.focus();
+      return;
+    }
+    const dup = savedWorkflows.some((w) => w.name.trim() === name);
+    if (dup) {
+      if (!globalThis.confirm(`\u5DF2\u5B58\u5728\u540C\u540D\u6D41\u7A0B\u300C${name}\u300D\uFF0C\u4ECD\u8981\u4EE5\u540C\u540D\u5132\u5B58\u55CE\uFF1F`)) return;
+    }
+    currentWorkflowName = name;
+    draftWorkflowNameInputEl.value = name;
     savedWorkflows = [
       {
         id: globalThis.crypto?.randomUUID?.() || `wf-${Date.now()}`,
@@ -2552,15 +2848,18 @@
       },
       ...savedWorkflows
     ].slice(0, 20);
+    draftNameFromImport = false;
     renderSavedWorkflows();
     setSavedWorkflowsOpen(true);
     await saveMessages();
     setToast(`\u5DF2\u5EFA\u7ACB\u6D41\u7A0B\uFF1A${name}`, "ok");
   });
   clearDraftButton.addEventListener("click", () => {
-    if (!draftSteps.length) return;
-    if (!confirmDelete("\u78BA\u5B9A\u8981\u6E05\u7A7A\u76EE\u524D\u6D41\u7A0B\u8349\u7A3F\u55CE\uFF1F")) return;
     draftSteps = [];
+    currentWorkflowName = "";
+    draftNameFromImport = false;
+    draftWorkflowNameInputEl.value = "";
+    importWorkflowJsonInputEl.value = "";
     renderDraftSteps();
     setToast("\u5DF2\u6E05\u7A7A\u6D41\u7A0B\u8349\u7A3F\u3002", "normal");
   });
@@ -2571,10 +2870,78 @@
   closeDockButton.addEventListener("click", () => {
     chrome?.runtime?.sendMessage({ type: "CLOSE_HELLO_DOCK" });
   });
+  exportDraftWorkflowJsonButton.addEventListener("click", () => {
+    if (!draftSteps.length) {
+      setToast("\u8349\u7A3F\u70BA\u7A7A\uFF0C\u7121\u6CD5\u532F\u51FA\u3002", "error");
+      return;
+    }
+    const name = draftWorkflowNameInputEl.value.trim() || currentWorkflowName.trim() || `\u8349\u7A3F_${savedWorkflows.length + 1}`;
+    const json = buildWorkflowExportJson(name, draftSteps);
+    downloadWorkflowJsonFile(name, json);
+    setToast("\u5DF2\u4E0B\u8F09\u8349\u7A3F JSON\u3002", "ok");
+  });
+  copyDraftWorkflowJsonButton.addEventListener("click", async () => {
+    if (!draftSteps.length) {
+      setToast("\u8349\u7A3F\u70BA\u7A7A\uFF0C\u7121\u6CD5\u532F\u51FA\u3002", "error");
+      return;
+    }
+    const name = draftWorkflowNameInputEl.value.trim() || currentWorkflowName.trim() || `\u8349\u7A3F_${savedWorkflows.length + 1}`;
+    const json = buildWorkflowExportJson(name, draftSteps);
+    const copied = await copyWorkflowJsonToClipboard(json);
+    if (copied) setToast("\u5DF2\u8907\u88FD\u8349\u7A3F JSON \u5230\u526A\u8CBC\u7C3F\u3002", "ok");
+    else {
+      downloadWorkflowJsonFile(name, json);
+      setToast("\u8907\u88FD\u5931\u6557\uFF0C\u5DF2\u6539\u70BA\u4E0B\u8F09 JSON\u3002", "normal");
+    }
+  });
+  importWorkflowToDraftButton.addEventListener("click", async () => {
+    const text = importWorkflowJsonInputEl.value.trim();
+    if (!text) {
+      setToast("\u8ACB\u5148\u8CBC\u4E0A\u6D41\u7A0B JSON\u3002", "error");
+      return;
+    }
+    const parsed = parseWorkflowImportJson(text);
+    if (!parsed.ok) {
+      setToast(parsed.error, "error");
+      return;
+    }
+    const draftName = defaultImportedWorkflowName(parsed.name);
+    const similar = findSavedWorkflowWithSameSignature(parsed.steps);
+    const duplicateName = findSavedWorkflowWithDuplicateName(draftName);
+    const hasAbsoluteUrl = workflowStepsHaveAbsoluteUrl(parsed.steps);
+    const confirmed = await showWorkflowImportConfirmDialog({
+      draftName,
+      stepCount: parsed.steps.length,
+      similar,
+      duplicateName,
+      hasAbsoluteUrl
+    });
+    if (!confirmed) return;
+    draftSteps = parsed.steps.map((s) => ({
+      ...s,
+      params: [...s.params ?? []],
+      headers: { ...s.headers ?? {} }
+    }));
+    currentWorkflowName = draftName;
+    syncDraftWorkflowNameInputFromState();
+    draftNameFromImport = true;
+    editingStepIndex = -1;
+    addStepButton.textContent = "\u52A0\u5165\u6D41\u7A0B\u6B65\u9A5F";
+    addStepButton.classList.remove("updating");
+    renderDraftSteps();
+    renderApiDetail(getAllApiCandidates()[selectedApiIndex] ?? null);
+    setWorkflowPanelOpen(true);
+    await saveMessages();
+    setToast(`\u5DF2\u532F\u5165\u8349\u7A3F\uFF1A${draftName}`, "ok");
+  });
   setWorkflowPanelOpen(true);
   renderManualHeaderRowsFromObject({});
   renderManualParamsRows([]);
   void loadMessages();
+  draftWorkflowNameInputEl.addEventListener("input", () => {
+    currentWorkflowName = draftWorkflowNameInputEl.value;
+    draftNameFromImport = false;
+  });
   addHeaderRowButton.addEventListener("click", () => {
     appendManualHeaderRow();
   });

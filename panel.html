@@ -102,7 +102,36 @@
             </div>
             <div class="draft-steps-section">
               <div class="workflow-subtitle">流程草稿（依序執行）</div>
+              <div class="draft-workflow-name-row">
+                <label for="draftWorkflowName" class="draft-workflow-name-label">流程名稱</label>
+                <input
+                  id="draftWorkflowName"
+                  type="text"
+                  class="draft-workflow-name-input"
+                  placeholder="自行建立請填寫；載入／匯入會自動帶入"
+                  autocomplete="off"
+                />
+              </div>
               <ol id="draftSteps"></ol>
+              <div class="workflow-share-block">
+                <div class="workflow-subtitle">分享／匯入流程（JSON）</div>
+                <p class="workflow-share-hint">
+                  匯出不含 Authorization、API Key、Cookie；匯入後請於各步驟自行補齊敏感 Header。
+                </p>
+                <div class="workflow-share-actions">
+                  <button id="exportDraftWorkflowJson" type="button" class="workflow-share-btn">下載草稿 JSON</button>
+                  <button id="copyDraftWorkflowJson" type="button" class="workflow-share-btn">複製草稿 JSON</button>
+                </div>
+                <textarea
+                  id="importWorkflowJsonInput"
+                  class="import-workflow-json"
+                  rows="4"
+                  placeholder="貼上他人分享的流程 JSON…"
+                ></textarea>
+                <button id="importWorkflowToDraft" type="button" class="workflow-share-btn workflow-share-btn-primary">
+                  匯入至草稿
+                </button>
+              </div>
               <div class="draft-actions">
                 <button id="runWorkflow" type="button">執行流程</button>
                 <button id="saveWorkflow" type="button">儲存流程</button>

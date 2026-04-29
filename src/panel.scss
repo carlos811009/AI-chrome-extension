@@ -1344,6 +1344,147 @@ select {
   }
 }
 
+.draft-workflow-name-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.draft-workflow-name-label {
+  font-size: $font-size-min;
+  font-weight: 700;
+  color: $text-sub;
+}
+
+.draft-workflow-name-input {
+  width: 100%;
+  font-size: $font-size-min;
+  padding: 8px 10px;
+  border: 1px solid $border-strong;
+  border-radius: $radius;
+  background: $bg-white;
+  color: $text-primary;
+  box-sizing: border-box;
+  &:focus {
+    outline: none;
+    border-color: $primary;
+    box-shadow: 0 0 0 2px $primary-ring;
+  }
+}
+
+.workflow-share-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px dashed $border;
+  margin-top: 4px;
+}
+
+.workflow-share-hint {
+  margin: 0;
+  font-size: $font-size-min;
+  color: $text-muted;
+  line-height: 1.45;
+}
+
+.workflow-share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.workflow-share-btn {
+  font-size: $font-size-min;
+  padding: 6px 10px;
+  border-radius: $radius-sm;
+  border: 1px solid $border;
+  background: $border-faint;
+  color: $text-sub;
+  cursor: pointer;
+  font-weight: 600;
+  &:hover {
+    background: #e0e7ff;
+    color: $primary;
+    border-color: #c7d2fe;
+  }
+}
+
+.workflow-share-btn-primary {
+  background: linear-gradient(90deg, $primary, $violet);
+  color: #fff !important;
+  border: none;
+  align-self: flex-start;
+  &:hover {
+    background: linear-gradient(90deg, $primary-dark, $violet-dark);
+    color: #fff !important;
+  }
+}
+
+.import-workflow-json {
+  width: 100%;
+  min-height: 72px;
+  font-family: $font-mono;
+  font-size: $font-size-min;
+  line-height: 1.35;
+}
+
+.workflow-import-confirm-list {
+  margin: 10px 0 0;
+  padding-left: 1.2em;
+  font-size: $font-size-min;
+  color: $text-sub;
+  line-height: 1.5;
+  li + li {
+    margin-top: 6px;
+  }
+}
+
+@keyframes workflow-import-alert-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(217, 119, 6, 0.4),
+      0 4px 16px rgba(245, 158, 11, 0.2);
+  }
+  50% {
+    box-shadow:
+      0 0 0 5px rgba(217, 119, 6, 0.12),
+      0 6px 22px rgba(245, 158, 11, 0.32);
+  }
+}
+
+.workflow-import-alert-banner {
+  margin: 12px 0 4px;
+  padding: 14px 16px;
+  border-radius: $radius-md;
+  border: 2px solid $amber-dark;
+  background: linear-gradient(145deg, #fffbeb 0%, #fef3c7 50%, #fde68a 100%);
+  animation: workflow-import-alert-pulse 2.2s ease-in-out infinite;
+}
+
+.workflow-import-alert-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #92400e;
+  margin-bottom: 10px;
+  letter-spacing: 0.04em;
+}
+
+.workflow-import-alert-item {
+  font-size: $font-size-min;
+  font-weight: 700;
+  color: $text-primary;
+  line-height: 1.55;
+  padding: 9px 11px;
+  border-radius: $radius-sm;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(180, 83, 9, 0.55);
+  & + & {
+    margin-top: 10px;
+  }
+}
+
 // ── Add step button ──
 #apiDetailParams {
   padding: 8px 12px;
@@ -1556,6 +1697,7 @@ select {
 
 .workflow-card-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   flex-shrink: 0;
   button {

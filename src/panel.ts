@@ -74,6 +74,18 @@ type SavedWorkflow = {
   name: string;
   steps: WorkflowStep[];
 };
+
+/** 流程 JSON 分享格式（單一流程） */
+type WorkflowExportEnvelope = {
+  format: "personal-extension-workflow";
+  version: number;
+  exportedAt: string;
+  workflow: {
+    name: string;
+    steps: WorkflowStep[];
+  };
+};
+
 type AuthState = {
   firebaseIdToken: string;
   googleAccessToken: string;
@@ -85,6 +97,8 @@ type AuthState = {
 const STORAGE_KEY = "chatMessages";
 const SESSION_ID_KEY = "chatSessionId";
 const WORKFLOWS_KEY = "savedWorkflows";
+const WORKFLOW_EXPORT_FORMAT = "personal-extension-workflow" as const;
+const WORKFLOW_EXPORT_VERSION = 1;
 const EXEC_RESULTS_KEY = "execResults";
 const AUTH_STATE_KEY = "authState";
 const CUSTOM_APIS_KEY = "customApis";
@@ -147,6 +161,7 @@ const draftStepsEl = document.getElementById("draftSteps") as HTMLOListElement;
 const runWorkflowButton = document.getElementById("runWorkflow") as HTMLButtonElement;
 const saveWorkflowButton = document.getElementById("saveWorkflow") as HTMLButtonElement;
 const clearDraftButton = document.getElementById("clearDraft") as HTMLButtonElement;
+const draftWorkflowNameInputEl = document.getElementById("draftWorkflowName") as HTMLInputElement;
 const savedWorkflowsEl = document.getElementById("savedWorkflows") as HTMLDivElement;
 const toggleSavedApisButton = document.getElementById("toggleSavedApis") as HTMLButtonElement;
 const savedApisPanelEl = document.getElementById("savedApisPanel") as HTMLDivElement;
@@ -159,6 +174,10 @@ const executionResultPanelEl = document.getElementById("executionResultPanel") a
 const executionResultListEl = document.getElementById("executionResultList") as HTMLDivElement;
 const clearExecutionResultButton = document.getElementById("clearExecutionResult") as HTMLButtonElement;
 const panelBodyEl = document.querySelector(".panel-body") as HTMLDivElement | null;
+const exportDraftWorkflowJsonButton = document.getElementById("exportDraftWorkflowJson") as HTMLButtonElement;
+const copyDraftWorkflowJsonButton = document.getElementById("copyDraftWorkflowJson") as HTMLButtonElement;
+const importWorkflowJsonInputEl = document.getElementById("importWorkflowJsonInput") as HTMLTextAreaElement;
+const importWorkflowToDraftButton = document.getElementById("importWorkflowToDraft") as HTMLButtonElement;
 const MAX_EXEC_RESULTS = 10;
 let execResults: ExecResult[] = [];
 
@@ -186,6 +205,8 @@ let editedDetailSpec: ApiSpec | null = null;
 let editingStepIndex = -1;
 let editingApiIndex = -1;
 let currentWorkflowName = "";
+/** 流程名稱欄是否由 JSON 匯入帶入（用於儲存時必填提示文案） */
+let draftNameFromImport = false;
 const fallbackStorage = new Map<string, string>();
 const extensionChrome = typeof chrome !== "undefined" ? chrome : undefined;
 
@@ -1308,7 +1329,329 @@ function renderApiCandidates(): void {
   renderApiDetail(selectedSpec || null);
 }
 
+// ===== 流程分享／匯入（JSON）=====
+
+function isSensitiveShareHeaderKey(key: string): boolean {
+  const k = key.trim().toLowerCase();
+  if (k === "authorization" || k === "cookie") return true;
+  if (k === "x-api-key" || k.endsWith("api-key")) return true;
+  return false;
+}
+
+function sanitizeHeadersForShare(headers: Record<string, string> | undefined): Record<string, string> {
+  if (!headers) return {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(headers)) {
+    if (isSensitiveShareHeaderKey(k)) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+function sanitizeStepForShare(step: WorkflowStep): WorkflowStep {
+  return {
+    ...step,
+    params: [...(step.params ?? [])],
+    headers: sanitizeHeadersForShare(step.headers),
+    bearerToken: "",
+  };
+}
+
+/** 用於「類似流程」比對：method + 正規化後的請求目標（path 優先，否則 api；完整 URL 取 pathname） */
+function normalizeWorkflowRequestTarget(raw: string): string {
+  const t = raw.trim();
+  if (!t) return "";
+  if (/^https?:\/\//i.test(t)) {
+    try {
+      const u = new URL(t);
+      const p = u.pathname.replace(/\/+$/, "") || "/";
+      return p.toLowerCase();
+    } catch {
+      return t.toLowerCase();
+    }
+  }
+  return t.replace(/^\/+/, "").replace(/\/+$/, "").toLowerCase();
+}
+
+function workflowStepSignature(step: WorkflowStep): string {
+  const method = (step.method || "GET").toUpperCase();
+  const raw = (step.path && step.path.trim()) || (step.api || "").trim();
+  return `${method}:${normalizeWorkflowRequestTarget(raw)}`;
+}
+
+/** 類似流程：與任一「已儲存流程」的 (method + 正規化 path) 序列完全相同 */
+function findSavedWorkflowWithSameSignature(steps: WorkflowStep[]): SavedWorkflow | null {
+  if (!steps.length) return null;
+  const sig = steps.map(workflowStepSignature).join("\n");
+  for (const w of savedWorkflows) {
+    if (!w.steps.length) continue;
+    if (w.steps.map(workflowStepSignature).join("\n") === sig) return w;
+  }
+  return null;
+}
+
+function workflowStepsHaveAbsoluteUrl(steps: WorkflowStep[]): boolean {
+  return steps.some((s) => {
+    const t = (s.path && s.path.trim()) || (s.api || "").trim();
+    return /^https?:\/\//i.test(t);
+  });
+}
+
+function buildWorkflowExportJson(workflowName: string, steps: WorkflowStep[]): string {
+  const envelope: WorkflowExportEnvelope = {
+    format: WORKFLOW_EXPORT_FORMAT,
+    version: WORKFLOW_EXPORT_VERSION,
+    exportedAt: new Date().toISOString(),
+    workflow: {
+      name: workflowName.trim() || "未命名流程",
+      steps: steps.map(sanitizeStepForShare),
+    },
+  };
+  return `${JSON.stringify(envelope, null, 2)}\n`;
+}
+
+async function copyWorkflowJsonToClipboard(json: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(json);
+      return true;
+    }
+  } catch {
+    /* fallback */
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = json;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+function downloadWorkflowJsonFile(filename: string, json: string): void {
+  const safe = filename.replace(/[^\w\u4e00-\u9fff.-]+/g, "_").slice(0, 80) || "workflow";
+  const blob = new Blob([json], { type: "application/json;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${safe}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function parseWorkflowStepFromImport(raw: unknown): WorkflowStep | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const apiRaw = typeof o.api === "string" ? o.api.trim() : "";
+  const pathRaw = typeof o.path === "string" ? o.path.trim() : "";
+  const target = pathRaw || apiRaw;
+  if (!target) return null;
+  const purpose = typeof o.purpose === "string" ? o.purpose.trim() : "匯入流程步驟";
+  const params = Array.isArray(o.params) ? o.params.map((p) => String(p).trim()).filter(Boolean) : [];
+  const methodRaw = typeof o.method === "string" ? o.method.trim().toUpperCase() : "";
+  const method = methodRaw || "GET";
+  let headers: Record<string, string> = {};
+  if (o.headers && typeof o.headers === "object" && !Array.isArray(o.headers)) {
+    for (const [k, v] of Object.entries(o.headers as Record<string, unknown>)) {
+      if (typeof v === "string") headers[k] = v;
+    }
+  }
+  headers = sanitizeHeadersForShare(headers);
+  const bodyTemplate = typeof o.bodyTemplate === "string" ? o.bodyTemplate : "";
+  const requestName = typeof o.requestName === "string" ? o.requestName.trim() : undefined;
+  return {
+    api: apiRaw || pathRaw,
+    path: pathRaw || undefined,
+    requestName,
+    method: method || "GET",
+    headers,
+    bodyTemplate,
+    bearerToken: "",
+    purpose: purpose || "匯入流程步驟",
+    params,
+  };
+}
+
+function parseWorkflowImportJson(
+  text: string,
+): { ok: true; steps: WorkflowStep[]; name: string } | { ok: false; error: string } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text) as unknown;
+  } catch {
+    return { ok: false, error: "不是有效的 JSON。" };
+  }
+  if (!parsed || typeof parsed !== "object") {
+    return { ok: false, error: "JSON 根節點必須為物件。" };
+  }
+  const root = parsed as Record<string, unknown>;
+  if (root.format !== WORKFLOW_EXPORT_FORMAT) {
+    return { ok: false, error: `缺少或無效的 format（須為「${WORKFLOW_EXPORT_FORMAT}」）。` };
+  }
+  const version = typeof root.version === "number" ? root.version : Number(root.version);
+  if (version !== WORKFLOW_EXPORT_VERSION) {
+    return { ok: false, error: `不支援的版本：${String(root.version)}（目前僅支援 ${WORKFLOW_EXPORT_VERSION}）。` };
+  }
+  const wf = root.workflow;
+  if (!wf || typeof wf !== "object") {
+    return { ok: false, error: "缺少 workflow 物件。" };
+  }
+  const wfo = wf as Record<string, unknown>;
+  const name = typeof wfo.name === "string" ? wfo.name.trim() : "";
+  const stepsRaw = wfo.steps;
+  if (!Array.isArray(stepsRaw) || !stepsRaw.length) {
+    return { ok: false, error: "workflow.steps 必須為非空陣列。" };
+  }
+  const steps: WorkflowStep[] = [];
+  for (let i = 0; i < stepsRaw.length; i += 1) {
+    const step = parseWorkflowStepFromImport(stepsRaw[i]);
+    if (!step) return { ok: false, error: `第 ${i + 1} 步格式不正確（需有 path 或 api）。` };
+    steps.push(step);
+  }
+  return { ok: true, steps, name };
+}
+
+function defaultImportedWorkflowName(suggested: string): string {
+  const base = suggested.trim();
+  if (base) return base;
+  const ts = new Date().toLocaleString("zh-Hant-TW", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return `匯入流程 ${ts}`;
+}
+
+/** 與任一已儲存流程的「名稱」完全相同（trim 後） */
+function findSavedWorkflowWithDuplicateName(name: string): SavedWorkflow | null {
+  const n = name.trim();
+  if (!n) return null;
+  return savedWorkflows.find((w) => w.name.trim() === n) ?? null;
+}
+
+type WorkflowImportConfirmInfo = {
+  draftName: string;
+  stepCount: number;
+  similar: SavedWorkflow | null;
+  duplicateName: SavedWorkflow | null;
+  hasAbsoluteUrl: boolean;
+};
+
+function showWorkflowImportConfirmDialog(info: WorkflowImportConfirmInfo): Promise<boolean> {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "exec-confirm-overlay";
+    const dialog = document.createElement("div");
+    dialog.className = "exec-confirm-dialog";
+
+    const titleEl = document.createElement("div");
+    titleEl.className = "exec-confirm-title";
+    titleEl.textContent = "匯入流程至草稿";
+
+    const intro = document.createElement("div");
+    intro.className = "exec-confirm-subtitle";
+    intro.textContent = `將載入「${info.draftName}」，共 ${info.stepCount} 個步驟，並覆寫目前草稿。`;
+
+    const showProminentAlerts = Boolean(info.duplicateName || info.similar);
+    let alertBanner: HTMLDivElement | null = null;
+    if (showProminentAlerts) {
+      alertBanner = document.createElement("div");
+      alertBanner.className = "workflow-import-alert-banner";
+      const bannerTitle = document.createElement("div");
+      bannerTitle.className = "workflow-import-alert-title";
+      bannerTitle.textContent = "請留意：與現有流程重疊";
+      alertBanner.appendChild(bannerTitle);
+
+      if (info.duplicateName && info.similar && info.duplicateName.id === info.similar.id) {
+        const row = document.createElement("div");
+        row.className = "workflow-import-alert-item workflow-import-alert-item--both";
+        row.textContent = `與已儲存流程「${info.similar.name}」同名，且每步 HTTP 方法 + 正規化路徑序列完全相同，極可能為同一條流程。`;
+        alertBanner.appendChild(row);
+      } else {
+        if (info.duplicateName) {
+          const row = document.createElement("div");
+          row.className = "workflow-import-alert-item workflow-import-alert-item--duplicate";
+          row.textContent = `已有已儲存流程使用相同名稱「${info.draftName}」（與「${info.duplicateName.name}」同名），匯入後草稿名稱也會相同，建議匯入後改名再儲存。`;
+          alertBanner.appendChild(row);
+        }
+        if (info.similar) {
+          const row = document.createElement("div");
+          row.className = "workflow-import-alert-item workflow-import-alert-item--similar";
+          row.textContent = `步驟路徑與「${info.similar.name}」完全相同（每步 HTTP 方法 + 正規化路徑序列一致），可能與該流程重複。`;
+          alertBanner.appendChild(row);
+        }
+      }
+    }
+
+    const list = document.createElement("ul");
+    list.className = "workflow-import-confirm-list";
+
+    const liAuth = document.createElement("li");
+    liAuth.textContent =
+      "此 JSON 不含 Authorization、API Key、Cookie 等敏感 Header；若 API 需要，請匯入後在各步驟的 API 設定中自行補上。";
+    list.appendChild(liAuth);
+
+    if (info.hasAbsoluteUrl) {
+      const liUrl = document.createElement("li");
+      liUrl.textContent =
+        "偵測到完整 URL（含 http/https）：請確認與你目前的環境一致，必要時請改為相對 path 或正確的網址。";
+      list.appendChild(liUrl);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "exec-confirm-actions";
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "exec-confirm-cancel";
+    cancelBtn.textContent = "取消";
+    const okBtn = document.createElement("button");
+    okBtn.type = "button";
+    okBtn.className = "exec-confirm-ok";
+    okBtn.textContent = "仍匯入";
+
+    function close(ok: boolean): void {
+      overlay.remove();
+      resolve(ok);
+    }
+
+    cancelBtn.addEventListener("click", () => close(false));
+    okBtn.addEventListener("click", () => close(true));
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close(false);
+    });
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(okBtn);
+    dialog.appendChild(titleEl);
+    dialog.appendChild(intro);
+    if (alertBanner) dialog.appendChild(alertBanner);
+    dialog.appendChild(list);
+    dialog.appendChild(actions);
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+  });
+}
+
 // ===== 流程草稿、已儲存流程、已儲存 API =====
+
+function getDraftWorkflowDisplayName(): string {
+  const fromInput = draftWorkflowNameInputEl.value.trim();
+  if (fromInput) return fromInput;
+  return (currentWorkflowName || "").trim() || "草稿";
+}
+
+function syncDraftWorkflowNameInputFromState(): void {
+  draftWorkflowNameInputEl.value = currentWorkflowName;
+}
+
 function renderDraftSteps(): void {
   draftStepsEl.replaceChildren();
   if (!draftSteps.length) {
@@ -1415,6 +1758,8 @@ function renderSavedWorkflows(): void {
         headers: step.headers ? { ...step.headers } : {},
       }));
       currentWorkflowName = workflow.name;
+      syncDraftWorkflowNameInputFromState();
+      draftNameFromImport = false;
       renderDraftSteps();
       setWorkflowPanelOpen(true);
       setToast(`已載入流程：${workflow.name}`, "ok");
@@ -2371,7 +2716,7 @@ async function executeDraftWorkflow(): Promise<void> {
     notifyAuthExpired();
     return;
   }
-  const workflowName = currentWorkflowName || "草稿";
+  const workflowName = getDraftWorkflowDisplayName();
   const timestamp = new Date().toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" });
 
   // Build workflow result block
@@ -2996,9 +3341,21 @@ saveWorkflowButton.addEventListener("click", async () => {
     setToast("流程草稿是空的，請先加入 API。", "error");
     return;
   }
-  const defaultName = `流程${savedWorkflows.length + 1}`;
-  const name = (globalThis.prompt("請輸入流程名稱", defaultName) || "").trim();
-  if (!name) return;
+  const name = draftWorkflowNameInputEl.value.trim();
+  if (!name) {
+    const msg = draftNameFromImport
+      ? "請填寫流程名稱後再儲存。"
+      : "請填寫流程名稱（自行建立的草稿為必填）。";
+    setToast(msg, "error");
+    draftWorkflowNameInputEl.focus();
+    return;
+  }
+  const dup = savedWorkflows.some((w) => w.name.trim() === name);
+  if (dup) {
+    if (!globalThis.confirm(`已存在同名流程「${name}」，仍要以同名儲存嗎？`)) return;
+  }
+  currentWorkflowName = name;
+  draftWorkflowNameInputEl.value = name;
   savedWorkflows = [
     {
       id: globalThis.crypto?.randomUUID?.() || `wf-${Date.now()}`,
@@ -3011,6 +3368,7 @@ saveWorkflowButton.addEventListener("click", async () => {
     },
     ...savedWorkflows,
   ].slice(0, 20);
+  draftNameFromImport = false;
   renderSavedWorkflows();
   setSavedWorkflowsOpen(true);
   await saveMessages();
@@ -3018,9 +3376,11 @@ saveWorkflowButton.addEventListener("click", async () => {
 });
 
 clearDraftButton.addEventListener("click", () => {
-  if (!draftSteps.length) return;
-  if (!confirmDelete("確定要清空目前流程草稿嗎？")) return;
   draftSteps = [];
+  currentWorkflowName = "";
+  draftNameFromImport = false;
+  draftWorkflowNameInputEl.value = "";
+  importWorkflowJsonInputEl.value = "";
   renderDraftSteps();
   setToast("已清空流程草稿。", "normal");
 });
@@ -3034,10 +3394,88 @@ closeDockButton.addEventListener("click", () => {
   chrome?.runtime?.sendMessage({ type: "CLOSE_HELLO_DOCK" });
 });
 
+exportDraftWorkflowJsonButton.addEventListener("click", () => {
+  if (!draftSteps.length) {
+    setToast("草稿為空，無法匯出。", "error");
+    return;
+  }
+  const name =
+    draftWorkflowNameInputEl.value.trim() ||
+    currentWorkflowName.trim() ||
+    `草稿_${savedWorkflows.length + 1}`;
+  const json = buildWorkflowExportJson(name, draftSteps);
+  downloadWorkflowJsonFile(name, json);
+  setToast("已下載草稿 JSON。", "ok");
+});
+
+copyDraftWorkflowJsonButton.addEventListener("click", async () => {
+  if (!draftSteps.length) {
+    setToast("草稿為空，無法匯出。", "error");
+    return;
+  }
+  const name =
+    draftWorkflowNameInputEl.value.trim() ||
+    currentWorkflowName.trim() ||
+    `草稿_${savedWorkflows.length + 1}`;
+  const json = buildWorkflowExportJson(name, draftSteps);
+  const copied = await copyWorkflowJsonToClipboard(json);
+  if (copied) setToast("已複製草稿 JSON 到剪貼簿。", "ok");
+  else {
+    downloadWorkflowJsonFile(name, json);
+    setToast("複製失敗，已改為下載 JSON。", "normal");
+  }
+});
+
+importWorkflowToDraftButton.addEventListener("click", async () => {
+  const text = importWorkflowJsonInputEl.value.trim();
+  if (!text) {
+    setToast("請先貼上流程 JSON。", "error");
+    return;
+  }
+  const parsed = parseWorkflowImportJson(text);
+  if (!parsed.ok) {
+    setToast(parsed.error, "error");
+    return;
+  }
+  const draftName = defaultImportedWorkflowName(parsed.name);
+  const similar = findSavedWorkflowWithSameSignature(parsed.steps);
+  const duplicateName = findSavedWorkflowWithDuplicateName(draftName);
+  const hasAbsoluteUrl = workflowStepsHaveAbsoluteUrl(parsed.steps);
+  const confirmed = await showWorkflowImportConfirmDialog({
+    draftName,
+    stepCount: parsed.steps.length,
+    similar,
+    duplicateName,
+    hasAbsoluteUrl,
+  });
+  if (!confirmed) return;
+  draftSteps = parsed.steps.map((s) => ({
+    ...s,
+    params: [...(s.params ?? [])],
+    headers: { ...(s.headers ?? {}) },
+  }));
+  currentWorkflowName = draftName;
+  syncDraftWorkflowNameInputFromState();
+  draftNameFromImport = true;
+  editingStepIndex = -1;
+  addStepButton.textContent = "加入流程步驟";
+  addStepButton.classList.remove("updating");
+  renderDraftSteps();
+  renderApiDetail(getAllApiCandidates()[selectedApiIndex] ?? null);
+  setWorkflowPanelOpen(true);
+  await saveMessages();
+  setToast(`已匯入草稿：${draftName}`, "ok");
+});
+
 setWorkflowPanelOpen(true);
 renderManualHeaderRowsFromObject({});
 renderManualParamsRows([]);
 void loadMessages();
+
+draftWorkflowNameInputEl.addEventListener("input", () => {
+  currentWorkflowName = draftWorkflowNameInputEl.value;
+  draftNameFromImport = false;
+});
 
 addHeaderRowButton.addEventListener("click", () => {
   appendManualHeaderRow();
