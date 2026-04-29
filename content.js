@@ -5,12 +5,12 @@
   const DOCK_WIDTH_KEY = "personalExtDockWidth";
   const DOCK_MIN_WIDTH = 280;
   const DOCK_MAX_WIDTH = 860;
-  const DOCK_DEFAULT_WIDTH = 620;
+  const DOCK_DEFAULT_WIDTH = 360;
   function getSavedWidth() {
     const raw = sessionStorage.getItem(DOCK_WIDTH_KEY);
     const n = Number(raw);
     if (Number.isFinite(n) && n >= DOCK_MIN_WIDTH && n <= DOCK_MAX_WIDTH) {
-      return Math.max(n, DOCK_DEFAULT_WIDTH);
+      return n;
     }
     return DOCK_DEFAULT_WIDTH;
   }
@@ -18,10 +18,12 @@
     htmlPaddingRight: "data-personalExtHtmlPaddingRight",
     htmlWidth: "data-personalExtHtmlWidth",
     htmlBoxSizing: "data-personalExtHtmlBoxSizing",
+    htmlOverflowX: "data-personalExtHtmlOverflowX",
     bodyPaddingRight: "data-personalExtBodyPaddingRight",
     bodyWidth: "data-personalExtBodyWidth",
     bodyBoxSizing: "data-personalExtBodyBoxSizing"
   };
+  const DOCK_OPEN_CLASS = "personal-extension-dock-open";
   const extensionChrome = globalThis.chrome;
   function removeDock() {
     const shell = document.getElementById(DOCK_SHELL_ID);
@@ -40,24 +42,31 @@
     rememberInlineStyle(INLINE_STYLE_KEYS.htmlPaddingRight, html.style.paddingRight);
     rememberInlineStyle(INLINE_STYLE_KEYS.htmlWidth, html.style.width);
     rememberInlineStyle(INLINE_STYLE_KEYS.htmlBoxSizing, html.style.boxSizing);
+    rememberInlineStyle(INLINE_STYLE_KEYS.htmlOverflowX, html.style.overflowX);
+    html.classList.add(DOCK_OPEN_CLASS);
     html.style.paddingRight = `${width}px`;
     html.style.boxSizing = "border-box";
     html.style.width = "100%";
+    html.style.overflowX = "hidden";
     if (!body) return;
     rememberInlineStyle(INLINE_STYLE_KEYS.bodyPaddingRight, body.style.paddingRight);
     rememberInlineStyle(INLINE_STYLE_KEYS.bodyWidth, body.style.width);
     rememberInlineStyle(INLINE_STYLE_KEYS.bodyBoxSizing, body.style.boxSizing);
     body.style.boxSizing = "border-box";
+    body.style.width = "100%";
   }
   function updateCompactionWidth(width) {
     document.documentElement.style.paddingRight = `${width}px`;
+    if (document.body) document.body.style.paddingRight = `${width}px`;
   }
   function restoreCompactionStyles() {
     const html = document.documentElement;
     const body = document.body;
+    html.classList.remove(DOCK_OPEN_CLASS);
     html.style.paddingRight = readRememberedInlineStyle(INLINE_STYLE_KEYS.htmlPaddingRight);
     html.style.width = readRememberedInlineStyle(INLINE_STYLE_KEYS.htmlWidth);
     html.style.boxSizing = readRememberedInlineStyle(INLINE_STYLE_KEYS.htmlBoxSizing);
+    html.style.overflowX = readRememberedInlineStyle(INLINE_STYLE_KEYS.htmlOverflowX);
     if (!body) return;
     body.style.paddingRight = readRememberedInlineStyle(INLINE_STYLE_KEYS.bodyPaddingRight);
     body.style.width = readRememberedInlineStyle(INLINE_STYLE_KEYS.bodyWidth);
@@ -122,49 +131,8 @@
       document.body.style.cursor = "";
       iframe.style.pointerEvents = "";
     });
-    const header = document.createElement("div");
-    Object.assign(header.style, {
-      flexShrink: "0",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: "8px",
-      padding: "10px 12px 10px 16px",
-      borderBottom: "1px solid #e0e0e0",
-      background: "#fafafa",
-      fontSize: "14px",
-      fontWeight: "600",
-      color: "#202124"
-    });
-    const title = document.createElement("span");
-    title.textContent = "Internal API Helper";
-    const closeBtn = document.createElement("button");
-    closeBtn.type = "button";
-    closeBtn.setAttribute("aria-label", "\u95DC\u9589\u9762\u677F");
-    closeBtn.textContent = "\xD7";
-    Object.assign(closeBtn.style, {
-      border: "0",
-      background: "transparent",
-      fontSize: "22px",
-      lineHeight: "1",
-      cursor: "pointer",
-      color: "#5f6368",
-      padding: "4px 8px",
-      borderRadius: "6px"
-    });
-    closeBtn.addEventListener("mouseenter", () => {
-      closeBtn.style.background = "#e8eaed";
-    });
-    closeBtn.addEventListener("mouseleave", () => {
-      closeBtn.style.background = "transparent";
-    });
-    closeBtn.addEventListener("click", () => {
-      removeDock();
-    });
-    header.appendChild(title);
-    header.appendChild(closeBtn);
     const iframe = document.createElement("iframe");
-    iframe.title = "Internal API Helper";
+    iframe.title = "Personal Workflow Assistant";
     iframe.src = extensionChrome.runtime.getURL("panel.html");
     Object.assign(iframe.style, {
       flex: "1",
@@ -173,7 +141,6 @@
       minHeight: "0"
     });
     shell.appendChild(resizeHandle);
-    shell.appendChild(header);
     shell.appendChild(iframe);
     document.documentElement.appendChild(shell);
     applyCompactionStyles(currentWidth);
@@ -193,6 +160,10 @@
     createDock();
   }
   extensionChrome?.runtime?.onMessage?.addListener((message) => {
+    if (message?.type === "CLOSE_HELLO_DOCK") {
+      if (isDockOpen()) removeDock();
+      return;
+    }
     if (message?.type === "TOGGLE_HELLO_DOCK") {
       toggleDock();
       return;

@@ -9,8 +9,11 @@
     <main class="chat-shell">
       <header class="chat-header">
         <div class="chat-header-top">
-          <span class="chat-header-title">⚙ Internal API Helper</span>
-          <button id="authorizeGoogle" type="button" class="auth-btn">Google 授權</button>
+          <span class="chat-header-title">Personal Workflow Assistant</span>
+          <div class="chat-header-actions">
+            <button id="authorizeGoogle" type="button" class="auth-btn">Google 授權</button>
+            <button id="closeDock" type="button" class="dock-close-btn" aria-label="關閉面板">×</button>
+          </div>
         </div>
         <div class="chat-header-meta">
           <p id="authStatus" class="auth-status-text"></p>
@@ -19,108 +22,115 @@
       </header>
 
       <div class="panel-body">
-      <div id="toastStatus" class="toast-status hidden"></div>
-      <section class="chat-section">
-        <button id="toggleChat" class="chat-section-toggle" type="button">AI 小幫手 ▾</button>
-        <div id="chatPanel" class="chat-section-panel">
-          <section id="chatMessages" class="chat-messages" aria-live="polite"></section>
-          <div id="chatResizeHandle" class="chat-resize-handle" title="拖拉調整對話框高度"></div>
+        <div id="toastStatus" class="toast-status hidden"></div>
+        <section class="chat-section">
+          <button id="toggleChat" class="chat-section-toggle" type="button">AI 小幫手 ▾</button>
+          <div id="chatPanel" class="chat-section-panel">
+            <section id="chatMessages" class="chat-messages" aria-live="polite"></section>
+            <div id="chatResizeHandle" class="chat-resize-handle" title="拖拉調整對話框高度"></div>
 
-          <form id="chatForm" class="chat-input-wrap">
-            <textarea id="chatInput" placeholder="例如：業務離職了，我要移除他的身份" required></textarea>
-            <div class="chat-actions">
-              <button id="sendMessage" type="submit">送出</button>
-              <button id="clearChat" type="button">清空對話</button>
-            </div>
-          </form>
-        </div>
-      </section>
-
-      <section class="workflow-section">
-        <button id="toggleWorkflows" class="workflow-toggle" type="button">常用工作流程 ▾</button>
-        <div id="workflowPanel" class="workflow-panel">
-          <div class="sub-section">
-            <button id="toggleSavedApis" class="sub-toggle" type="button">已儲存的 API ▸</button>
-            <div id="savedApisPanel" class="sub-panel collapsed">
-              <div id="savedApisList"></div>
-            </div>
-          </div>
-
-          <div class="sub-section">
-            <button id="toggleCurlParser" class="sub-toggle" type="button">解析 Curl ▾</button>
-            <div id="curlParserPanel" class="sub-panel collapsed">
-              <textarea id="manualApiCurl" placeholder="可直接貼上 curl 指令"></textarea>
-              <button id="parseCurl" type="button">解析 curl</button>
-            </div>
-          </div>
-
-          <div class="sub-section">
-            <button id="toggleManualApi" class="sub-toggle" type="button">自訂 API ▾</button>
-            <div id="manualApiPanel" class="sub-panel collapsed">
-              <input id="manualApiName" type="text" placeholder="API 名稱（例如：MedSalesRequest）" />
-              <select id="manualApiMethod">
-                <option value="GET">GET</option>
-                <option value="POST">POST</option>
-                <option value="PUT">PUT</option>
-                <option value="PATCH">PATCH</option>
-                <option value="DELETE">DELETE</option>
-              </select>
-              <input id="manualApiPath" type="text" placeholder="API 路徑或 URL（例如：siteId/med-sales）" />
-              <div class="workflow-subtitle headers-label">HEADERS（選擇常見 Key 或自訂）</div>
-              <div id="manualApiHeadersRows" class="header-rows"></div>
-              <button id="addHeaderRow" type="button" class="header-add-row">＋ 新增 Header</button>
-              <textarea id="manualApiBody" placeholder="Body（可貼 JSON）"></textarea>
-              <input id="manualApiPurpose" type="text" placeholder="API 說明（可選）" />
-              <button id="addManualApi" type="button">加入自訂 API</button>
-              <div id="manualApiActions" class="manual-api-actions hidden"></div>
-            </div>
-          </div>
-          <div class="api-zone-label">API 候選清單</div>
-          <div id="apiCandidates" class="api-candidates"></div>
-          <div class="api-detail" id="apiDetailSection">
-            <div class="api-detail-header">
-              <div class="api-detail-header-left">
-                <span class="api-detail-badge">API 設定</span>
-                <span id="apiDetailName" class="api-detail-name">尚未選擇 API</span>
+            <form id="chatForm" class="chat-input-wrap">
+              <textarea id="chatInput" placeholder="例如：業務離職了，我要移除他的身份" required></textarea>
+              <div class="chat-actions">
+                <button id="sendMessage" type="submit">送出</button>
+                <button id="clearChat" type="button">清空對話</button>
               </div>
-              <button id="cancelApiDetail" type="button" class="api-detail-cancel" title="取消選擇">✕</button>
-            </div>
-            <div id="apiDetailPurpose" class="api-detail-purpose"></div>
-            <div id="apiDetailParams" class="api-detail-params"></div>
-            <div id="apiDetailActions" class="manual-api-actions hidden">
-              <button id="addStep" type="button" class="create-workflow">加入流程步驟</button>
-              <button id="saveDetailApi" type="button" class="pending-api-save">新增到已儲存 API</button>
-              <button id="updateDetailApi" type="button" class="pending-api-step">更新已儲存 API</button>
-            </div>
+            </form>
           </div>
-          <div class="draft-steps-section">
-            <div class="workflow-subtitle">流程草稿（依序執行）</div>
-            <ol id="draftSteps"></ol>
-            <div class="draft-actions">
-              <button id="runWorkflow" type="button">執行流程</button>
-              <button id="saveWorkflow" type="button">儲存流程</button>
-              <button id="clearDraft" type="button">清空草稿</button>
-            </div>
-          </div>
-          <div class="sub-section">
-            <button id="toggleSavedWorkflows" class="sub-toggle" type="button">已儲存流程 ▸</button>
-            <div id="savedWorkflowsPanel" class="sub-panel collapsed">
-              <div id="savedWorkflows" class="saved-workflows"></div>
-            </div>
-          </div>
+        </section>
 
-          <div class="sub-section" id="executionResultSection">
-            <div class="exec-result-header">
-              <button id="toggleExecutionResult" class="sub-toggle exec-result-toggle" type="button">執行結果 ▾</button>
-              <button id="clearExecutionResult" class="exec-result-clear" type="button">清除</button>
+        <section class="workflow-section">
+          <button id="toggleWorkflows" class="workflow-toggle" type="button">常用工作流程 ▾</button>
+          <div id="workflowPanel" class="workflow-panel">
+            <div class="sub-section">
+              <button id="toggleSavedApis" class="sub-toggle" type="button">已儲存的 API ▸</button>
+              <div id="savedApisPanel" class="sub-panel collapsed">
+                <div id="savedApisList"></div>
+              </div>
             </div>
-            <div id="executionResultPanel" class="sub-panel">
-              <div id="executionResultList"></div>
+
+            <div class="sub-section">
+              <button id="toggleCurlParser" class="sub-toggle" type="button">解析 Curl ▾</button>
+              <div id="curlParserPanel" class="sub-panel collapsed">
+                <textarea id="manualApiCurl" placeholder="可直接貼上 curl 指令"></textarea>
+                <button id="parseCurl" type="button">解析 curl</button>
+              </div>
+            </div>
+
+            <div class="sub-section">
+              <button id="toggleManualApi" class="sub-toggle" type="button">自訂 API ▾</button>
+              <div id="manualApiPanel" class="sub-panel collapsed">
+                <input id="manualApiName" type="text" placeholder="API 名稱（例如：MedSalesRequest）" />
+                <select id="manualApiMethod">
+                  <option value="GET">GET</option>
+                  <option value="POST">POST</option>
+                  <option value="PUT">PUT</option>
+                  <option value="PATCH">PATCH</option>
+                  <option value="DELETE">DELETE</option>
+                </select>
+                <input id="manualApiPath" type="text" placeholder="API 路徑或 URL（例如：siteId/med-sales）" />
+                <div class="workflow-subtitle params-label">PARAMS（可手動維護）</div>
+                <div id="manualApiParamsRows" class="header-rows"></div>
+                <button id="addParamRow" type="button" class="header-add-row">＋ 新增 Param</button>
+                <div class="workflow-subtitle headers-label">HEADERS（選擇常見 Key 或自訂）</div>
+                <div id="manualApiHeadersRows" class="header-rows"></div>
+                <button id="addHeaderRow" type="button" class="header-add-row">＋ 新增 Header</button>
+                <textarea id="manualApiBody" placeholder="Body（可貼 JSON）"></textarea>
+                <input id="manualApiPurpose" type="text" placeholder="API 說明（可選）" />
+                <button id="addManualApi" type="button">加入自訂 API</button>
+                <div id="manualApiActions" class="manual-api-actions hidden"></div>
+                <button id="clearManualApi" type="button">清除自訂 API 內容</button>
+              </div>
+            </div>
+            <div class="api-zone-label">API 候選清單</div>
+            <div id="apiCandidates" class="api-candidates"></div>
+            <div class="api-detail" id="apiDetailSection">
+              <div class="api-detail-header">
+                <div class="api-detail-header-left">
+                  <span class="api-detail-badge">API 設定</span>
+                  <span id="apiDetailName" class="api-detail-name">尚未選擇 API</span>
+                </div>
+                <button id="cancelApiDetail" type="button" class="api-detail-cancel" title="取消選擇">✕</button>
+              </div>
+              <div id="apiDetailPurpose" class="api-detail-purpose"></div>
+              <div id="apiDetailParams" class="api-detail-params"></div>
+              <div id="apiDetailActions" class="manual-api-actions hidden">
+                <button id="addStep" type="button" class="create-workflow">加入流程步驟</button>
+                <button id="saveDetailApi" type="button" class="pending-api-save">新增到已儲存 API</button>
+                <button id="updateDetailApi" type="button" class="pending-api-step">更新已儲存 API</button>
+              </div>
+            </div>
+            <div class="draft-steps-section">
+              <div class="workflow-subtitle">流程草稿（依序執行）</div>
+              <ol id="draftSteps"></ol>
+              <div class="draft-actions">
+                <button id="runWorkflow" type="button">執行流程</button>
+                <button id="saveWorkflow" type="button">儲存流程</button>
+                <button id="clearDraft" type="button">清空草稿</button>
+              </div>
+            </div>
+            <div class="sub-section">
+              <button id="toggleSavedWorkflows" class="sub-toggle" type="button">已儲存流程 ▸</button>
+              <div id="savedWorkflowsPanel" class="sub-panel collapsed">
+                <div id="savedWorkflows" class="saved-workflows"></div>
+              </div>
+            </div>
+
+            <div class="sub-section" id="executionResultSection">
+              <div class="exec-result-header">
+                <button id="toggleExecutionResult" class="sub-toggle exec-result-toggle" type="button">
+                  執行結果 ▾
+                </button>
+                <button id="clearExecutionResult" class="exec-result-clear" type="button">清除</button>
+              </div>
+              <div id="executionResultPanel" class="sub-panel">
+                <div id="executionResultList"></div>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
-      </div><!-- /.panel-body -->
+        </section>
+      </div>
+      <!-- /.panel-body -->
     </main>
     <script src="panel.js"></script>
   </body>

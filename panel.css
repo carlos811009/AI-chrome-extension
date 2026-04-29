@@ -8,13 +8,8 @@ body {
   margin: 0;
   background: #f0f2f8;
   color: #1f2937;
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Arial,
-    sans-serif;
-  font-size: 13px;
+  font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  font-size: 15px;
 }
 
 .hidden {
@@ -26,17 +21,10 @@ button {
   border-radius: 8px;
   padding: 8px 12px;
   cursor: pointer;
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Arial,
-    sans-serif;
+  font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
   font-size: 12px;
   font-weight: 600;
-  transition:
-    background 0.15s,
-    opacity 0.15s;
+  transition: background 0.15s, opacity 0.15s;
 }
 button:disabled {
   opacity: 0.45;
@@ -51,12 +39,7 @@ select {
   border-radius: 7px;
   padding: 6px 9px;
   font-size: 12px;
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Arial,
-    sans-serif;
+  font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
   color: #1f2937;
   background: #fff;
   box-sizing: border-box;
@@ -101,10 +84,36 @@ select {
   gap: 8px;
 }
 
+.chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .chat-header-title {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 800;
   letter-spacing: 0.2px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dock-close-btn {
+  border: 0;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 10px 4px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.dock-close-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
 }
 
 .chat-header-meta {
@@ -115,13 +124,13 @@ select {
 }
 
 .auth-status-text {
-  font-size: 11px;
+  font-size: 12px;
   color: rgba(255, 255, 255, 0.85);
   margin: 0;
 }
 
 .oauth-info {
-  font-size: 10px;
+  font-size: 12px;
   color: rgba(255, 255, 255, 0.65);
   margin: 0;
   font-family: ui-monospace, "Cascadia Code", "Fira Mono", monospace;
@@ -148,8 +157,7 @@ select {
 }
 
 @keyframes auth-pulse {
-  0%,
-  100% {
+  0%, 100% {
     box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4);
   }
   50% {
@@ -229,6 +237,18 @@ select {
   }
 }
 
+.panel-body--auth-locked * {
+  pointer-events: none;
+}
+
+.panel-body--auth-locked .chat-section-toggle,
+.panel-body--auth-locked .workflow-toggle,
+.panel-body--auth-locked .sub-toggle,
+.panel-body--auth-locked .exec-workflow-toggle {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
 .chat-section,
 .workflow-section {
   border-radius: 10px;
@@ -246,7 +266,7 @@ select {
   padding: 10px 14px;
   background: linear-gradient(90deg, #4f46e5 0%, #7c3aed 100%);
   color: #fff;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   border: none;
   border-radius: 10px 10px 0 0;
@@ -275,7 +295,7 @@ select {
   padding: 10px;
   overflow-y: auto;
   min-height: 80px;
-  height: 220px;
+  height: 400px;
   display: block;
   scrollbar-width: thin;
   scrollbar-color: #a5b4fc #fafafa;
@@ -289,11 +309,6 @@ select {
 .chat-messages::-webkit-scrollbar-thumb {
   background: #a5b4fc;
   border-radius: 4px;
-}
-@media (max-width: 519px) {
-  .chat-messages {
-    max-height: 30vh;
-  }
 }
 .chat-messages > .message-row {
   margin-bottom: 8px;
@@ -346,7 +361,7 @@ select {
   padding: 8px 11px;
   line-height: 1.55;
   word-break: break-word;
-  font-size: 12.5px;
+  font-size: 15px;
 }
 .message-row.user .message-bubble {
   background: #4f46e5;
@@ -371,7 +386,7 @@ select {
   padding: 1px 4px;
   border-radius: 3px;
   font-family: ui-monospace, "Cascadia Code", "Fira Mono", monospace;
-  font-size: 11px;
+  font-size: 12px;
 }
 .message-row.assistant .message-bubble pre {
   background: #1e1e2e;
@@ -379,7 +394,7 @@ select {
   padding: 8px;
   border-radius: 7px;
   overflow-x: auto;
-  font-size: 11px;
+  font-size: 12px;
   margin: 4px 0;
 }
 .message-row.assistant .message-bubble strong {
@@ -388,7 +403,7 @@ select {
 
 .message-meta {
   margin-top: 3px;
-  font-size: 10px;
+  font-size: 12px;
   color: #9ca3af;
 }
 
@@ -406,7 +421,7 @@ select {
 }
 
 .skill-confirm-text {
-  font-size: 11px;
+  font-size: 12px;
   color: #4f46e5;
   font-weight: 600;
 }
@@ -419,7 +434,7 @@ select {
   flex: 1;
   background: #4f46e5;
   color: #fff;
-  font-size: 11px;
+  font-size: 12px;
   padding: 5px;
 }
 .skill-confirm-actions #skillSkip {
@@ -427,7 +442,7 @@ select {
   background: #f3f4f6;
   color: #374151;
   border: 1px solid #e2e8f0;
-  font-size: 11px;
+  font-size: 12px;
   padding: 5px;
 }
 .skill-confirm-actions #skillUse:hover {
@@ -447,7 +462,7 @@ select {
   min-height: 64px;
   max-height: 160px;
   resize: vertical;
-  font-size: 12.5px;
+  font-size: 15px;
 }
 .chat-input-wrap #chatInput:disabled {
   background: #f9fafb;
@@ -466,7 +481,7 @@ select {
 .chat-actions #sendMessage {
   background: linear-gradient(90deg, #4f46e5, #7c3aed);
   color: #fff;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   padding: 9px;
 }
@@ -499,7 +514,7 @@ select {
 }
 
 .workflow-subtitle {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   color: #9ca3af;
   letter-spacing: 0.5px;
@@ -580,7 +595,7 @@ select {
 }
 
 .exec-result-clear {
-  font-size: 10px;
+  font-size: 12px;
   padding: 4px 12px;
   background: #fff0f0;
   color: #b91c1c;
@@ -610,7 +625,7 @@ select {
 #manualApiCurl {
   min-height: 80px;
   font-family: ui-monospace, "Cascadia Code", "Fira Mono", monospace;
-  font-size: 11px;
+  font-size: 12px;
   background: #1e1e2e;
   color: #cdd6f4;
   border-color: #3b3d5c;
@@ -635,7 +650,7 @@ select {
 #manualApiPanel.sub-panel {
   display: grid;
   grid-template-columns: 1fr auto;
-  grid-template-areas: "name    method" "path    path" "hlabel  hlabel" "hrows   hrows" "hadd    hadd" "body    body" "purpose purpose" "savebtn savebtn" "actions actions";
+  grid-template-areas: "name    method" "path    path" "plabel  plabel" "prows   prows" "padd    padd" "hlabel  hlabel" "hrows   hrows" "hadd    hadd" "body    body" "purpose purpose" "savebtn savebtn" "actions actions" "clearbtn clearbtn";
   gap: 7px;
   padding: 10px 12px;
 }
@@ -660,10 +675,21 @@ select {
   grid-area: path;
 }
 
+.workflow-subtitle.params-label {
+  grid-area: plabel;
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b7280;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  margin: 0;
+  padding: 0;
+}
+
 .workflow-subtitle.headers-label,
 #manualApiPanel .workflow-subtitle {
   grid-area: hlabel;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   color: #6b7280;
   letter-spacing: 0.4px;
@@ -683,6 +709,17 @@ select {
   grid-area: hadd;
 }
 
+#manualApiParamsRows {
+  grid-area: prows;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#addParamRow {
+  grid-area: padd;
+}
+
 #manualApiBody {
   grid-area: body;
   min-height: 72px;
@@ -698,6 +735,10 @@ select {
 
 #manualApiActions {
   grid-area: actions;
+}
+
+#clearManualApi {
+  grid-area: clearbtn;
 }
 
 .header-row {
@@ -717,15 +758,10 @@ select {
 .header-key-select {
   flex: 1;
   padding: 4px 5px;
-  font-size: 11px;
+  font-size: 12px;
   border: 1px solid #d1d5db;
   border-radius: 5px;
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Arial,
-    sans-serif;
+  font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
   min-width: 0;
   background: #fff;
   color: #374151;
@@ -735,15 +771,10 @@ select {
   display: none;
   flex: 1;
   padding: 4px 5px;
-  font-size: 11px;
+  font-size: 12px;
   border: 1px solid #d1d5db;
   border-radius: 5px;
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Arial,
-    sans-serif;
+  font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
   min-width: 0;
 }
 .header-key-custom.visible {
@@ -752,20 +783,15 @@ select {
 
 .header-value {
   padding: 4px 6px;
-  font-size: 11px;
+  font-size: 12px;
   border: 1px solid #d1d5db;
   border-radius: 5px;
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Arial,
-    sans-serif;
+  font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
   width: 100%;
 }
 
 .header-remove {
-  font-size: 10px;
+  font-size: 12px;
   padding: 3px 6px;
   background: #fff0f0;
   color: #b91c1c;
@@ -775,7 +801,7 @@ select {
 }
 
 #addHeaderRow {
-  font-size: 11px;
+  font-size: 12px;
   padding: 5px 8px;
   background: #f8fafc;
   color: #374151;
@@ -804,6 +830,20 @@ select {
   background: #4338ca;
 }
 
+#clearManualApi {
+  width: 100%;
+  background: #f3f4f6;
+  color: #4b5563;
+  border: 1px solid #d1d5db;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px;
+  border-radius: 7px;
+}
+#clearManualApi:hover {
+  background: #e5e7eb;
+}
+
 .manual-api-actions {
   display: flex;
   gap: 6px;
@@ -815,7 +855,7 @@ select {
 .pending-api-save,
 .pending-api-step {
   flex: 1;
-  font-size: 11px;
+  font-size: 12px;
   padding: 7px 8px;
   border-radius: 7px;
   font-weight: 600;
@@ -845,13 +885,13 @@ select {
 }
 
 .field-error-hint {
-  font-size: 10px;
+  font-size: 12px;
   color: #ef4444;
   margin-top: 1px;
 }
 
 .api-zone-label {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   color: #9ca3af;
   letter-spacing: 0.5px;
@@ -889,7 +929,7 @@ select {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 7px;
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
@@ -908,15 +948,15 @@ select {
 }
 .api-candidates .api-candidate-name {
   font-weight: 700;
-  font-size: 11px;
+  font-size: 12px;
 }
 .api-candidates .api-candidate-purpose {
-  font-size: 10px;
+  font-size: 12px;
   color: #6b7280;
 }
 .api-candidates .api-candidate-remove,
 .api-candidates .api-candidate-save {
-  font-size: 10px;
+  font-size: 12px;
   padding: 0 6px;
   border-radius: 7px;
   align-self: center;
@@ -962,7 +1002,7 @@ select {
 }
 
 .api-detail-badge {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.8);
   letter-spacing: 0.5px;
@@ -990,7 +1030,7 @@ select {
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 7px;
   padding: 3px 9px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1.4;
 }
@@ -1011,7 +1051,7 @@ select {
 }
 
 .api-detail-purpose-label {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   color: #6b7280;
   letter-spacing: 0.4px;
@@ -1041,7 +1081,7 @@ select {
 }
 
 .detail-url-code {
-  font-size: 10px;
+  font-size: 12px;
   background: #1e1e2e;
   color: #a6e3a1;
   border-radius: 5px;
@@ -1063,7 +1103,7 @@ select {
   padding: 5px 9px;
   background: #f8fafc;
   color: #374151;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   border: none;
   cursor: pointer;
@@ -1099,7 +1139,7 @@ select {
 }
 
 .detail-edit-key {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   color: #6b7280;
 }
@@ -1107,16 +1147,11 @@ select {
 .detail-edit-input,
 .detail-edit-key-input,
 .detail-edit-val-input {
-  font-size: 11px;
+  font-size: 12px;
   border: 1px solid #e2e8f0;
   border-radius: 5px;
   padding: 4px 7px;
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Arial,
-    sans-serif;
+  font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
   width: 100%;
   background: #fff;
   color: #1f2937;
@@ -1132,7 +1167,7 @@ select {
 .detail-add-row-btn {
   width: 100%;
   margin-top: 4px;
-  font-size: 10px;
+  font-size: 12px;
   padding: 4px 8px;
   background: #f8fafc;
   color: #374151;
@@ -1149,7 +1184,7 @@ select {
 .detail-edit-body {
   width: 100%;
   min-height: 60px;
-  font-size: 11px;
+  font-size: 12px;
   border: 1px solid #e2e8f0;
   border-radius: 5px;
   padding: 4px 7px;
@@ -1158,7 +1193,7 @@ select {
 }
 
 .detail-empty {
-  font-size: 11px;
+  font-size: 12px;
   color: #9ca3af;
   padding: 2px 0;
 }
@@ -1260,7 +1295,7 @@ select {
 }
 
 .draft-step-num {
-  font-size: 10px;
+  font-size: 12px;
   color: #9ca3af;
 }
 
@@ -1274,7 +1309,7 @@ select {
 }
 
 .draft-step-purpose {
-  font-size: 10px;
+  font-size: 12px;
   color: #6b7280;
 }
 
@@ -1285,7 +1320,7 @@ select {
 }
 
 .draft-step-edit {
-  font-size: 10px;
+  font-size: 12px;
   padding: 3px 8px;
   background: #eef2ff;
   color: #4338ca;
@@ -1294,7 +1329,7 @@ select {
 }
 
 .draft-step-delete {
-  font-size: 10px;
+  font-size: 12px;
   padding: 3px 8px;
   background: #fff0f0;
   color: #b91c1c;
@@ -1316,7 +1351,7 @@ select {
   background: #4f46e5;
   color: #fff;
   font-weight: 700;
-  font-size: 11px;
+  font-size: 12px;
   padding: 8px 4px;
 }
 #runWorkflow:hover {
@@ -1327,7 +1362,7 @@ select {
   background: #f0fdf4;
   color: #15803d;
   border: 1px solid #bbf7d0;
-  font-size: 11px;
+  font-size: 12px;
   padding: 8px 4px;
 }
 #saveWorkflow:hover {
@@ -1338,7 +1373,7 @@ select {
   background: #f3f4f6;
   color: #6b7280;
   border: 1px solid #e2e8f0;
-  font-size: 11px;
+  font-size: 12px;
   padding: 8px 4px;
 }
 #clearDraft:hover {
@@ -1378,7 +1413,7 @@ select {
 }
 
 .workflow-card-steps {
-  font-size: 10px;
+  font-size: 12px;
   color: #6b7280;
   flex-shrink: 0;
 }
@@ -1389,7 +1424,7 @@ select {
   flex-shrink: 0;
 }
 .workflow-card-actions button {
-  font-size: 10px;
+  font-size: 12px;
   padding: 3px 8px;
   border-radius: 5px;
   background: #f1f5f9;
@@ -1419,9 +1454,7 @@ select {
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   background: #fafafa;
-  transition:
-    border-color 0.15s,
-    background 0.15s;
+  transition: border-color 0.15s, background 0.15s;
 }
 .saved-api-card.selected {
   border-color: #4f46e5;
@@ -1452,7 +1485,7 @@ select {
 }
 
 .saved-api-purpose {
-  font-size: 10px;
+  font-size: 12px;
   color: #6b7280;
   white-space: nowrap;
   overflow: hidden;
@@ -1465,7 +1498,7 @@ select {
   flex-shrink: 0;
 }
 .saved-api-actions button {
-  font-size: 10px;
+  font-size: 12px;
   padding: 3px 8px;
   background: #f1f5f9;
   color: #374151;
@@ -1504,7 +1537,7 @@ select {
   text-align: left;
   padding: 8px 11px;
   background: #f8fafc;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: #374151;
   border: none;
@@ -1553,13 +1586,12 @@ select {
 }
 
 .exec-step-icon {
-  font-size: 13px;
+  font-size: 12px;
   flex-shrink: 0;
 }
 
 @keyframes spin-pulse {
-  0%,
-  100% {
+  0%, 100% {
     opacity: 1;
   }
   50% {
@@ -1571,7 +1603,7 @@ select {
 }
 
 .exec-step-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: #1f2937;
   white-space: nowrap;
@@ -1580,7 +1612,7 @@ select {
 }
 
 .exec-step-status-text {
-  font-size: 10px;
+  font-size: 12px;
   color: #6b7280;
   flex-shrink: 0;
   background: #f1f5f9;
@@ -1597,7 +1629,7 @@ select {
 .exec-view-btn,
 .exec-copy-btn,
 .exec-save-api-btn {
-  font-size: 10px;
+  font-size: 12px;
   padding: 3px 8px;
   border-radius: 5px;
   white-space: nowrap;
@@ -1641,7 +1673,7 @@ select {
   overflow-y: auto;
   background: #1e1e2e;
   color: #cdd6f4;
-  font-size: 10px;
+  font-size: 12px;
   padding: 8px;
   border-radius: 7px;
   white-space: pre-wrap;
@@ -1689,13 +1721,13 @@ select {
 }
 
 .exec-confirm-title {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 800;
   color: #1f2937;
 }
 
 .exec-confirm-subtitle {
-  font-size: 11px;
+  font-size: 12px;
   color: #6b7280;
 }
 
@@ -1719,7 +1751,7 @@ select {
 }
 
 .exec-confirm-label {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   color: #6b7280;
   text-transform: uppercase;
@@ -1741,7 +1773,7 @@ select {
 }
 
 .exec-confirm-param-key {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   color: #6b7280;
   min-width: 64px;
@@ -1750,22 +1782,17 @@ select {
 
 .exec-confirm-param-value {
   flex: 1;
-  font-size: 11px;
+  font-size: 12px;
   border: 1px solid #d1d5db;
   border-radius: 5px;
   padding: 3px 7px;
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Arial,
-    sans-serif;
+  font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
 }
 
 .exec-confirm-body {
   width: 100%;
   min-height: 60px;
-  font-size: 11px;
+  font-size: 12px;
   border: 1px solid #d1d5db;
   border-radius: 7px;
   padding: 5px 7px;

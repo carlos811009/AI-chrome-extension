@@ -1,61 +1,70 @@
 // ═══════════════════════════════════════════════════════
 //  Design Tokens
 // ═══════════════════════════════════════════════════════
-$primary:       #4f46e5;
-$primary-dark:  #4338ca;
+$primary: #4f46e5;
+$primary-dark: #4338ca;
 $primary-light: #eef2ff;
-$primary-ring:  rgba(99, 102, 241, .12);
+$primary-ring: rgba(99, 102, 241, 0.12);
 
-$violet:        #7c3aed;
-$violet-dark:   #6d28d9;
+$violet: #7c3aed;
+$violet-dark: #6d28d9;
 
-$success:       #15803d;
-$success-bg:    #f0fdf4;
+$success: #15803d;
+$success-bg: #f0fdf4;
 $success-light: #dcfce7;
-$success-ring:  #bbf7d0;
+$success-ring: #bbf7d0;
 
-$danger:        #b91c1c;
-$danger-bg:     #fff0f0;
-$danger-light:  #fecaca;
+$danger: #b91c1c;
+$danger-bg: #fff0f0;
+$danger-light: #fecaca;
 
-$amber:         #f59e0b;
-$amber-dark:    #d97706;
-$amber-bg:      #fffbeb;
-$amber-ring:    rgba(245, 158, 11, .15);
+$amber: #f59e0b;
+$amber-dark: #d97706;
+$amber-bg: #fffbeb;
+$amber-ring: rgba(245, 158, 11, 0.15);
 
-$blue:          #1d4ed8;
-$blue-bg:       #eff6ff;
-$blue-light:    #dbeafe;
-$blue-ring:     #bfdbfe;
+$blue: #1d4ed8;
+$blue-bg: #eff6ff;
+$blue-light: #dbeafe;
+$blue-ring: #bfdbfe;
 
-$purple-bg:     #f5f3ff;
-$purple-light:  #ede9fe;
-$purple-ring:   #ddd6fe;
-$purple-text:   #6d28d9;
+$purple-bg: #f5f3ff;
+$purple-light: #ede9fe;
+$purple-ring: #ddd6fe;
+$purple-text: #6d28d9;
 
-$text-primary:  #1f2937;
-$text-sub:      #374151;
-$text-muted:    #6b7280;
-$text-faint:    #9ca3af;
+$text-primary: #1f2937;
+$text-sub: #374151;
+$text-muted: #6b7280;
+$text-faint: #9ca3af;
 
 $border-strong: #d1d5db;
-$border:        #e2e8f0;
-$border-light:  #e5e7eb;
-$border-faint:  #f1f5f9;
+$border: #e2e8f0;
+$border-light: #e5e7eb;
+$border-faint: #f1f5f9;
 
-$bg-white:      #fff;
-$bg-canvas:     #fafafa;
-$bg-soft:       #f8fafc;
-$bg-page:       #f0f2f8;
+$bg-white: #fff;
+$bg-canvas: #fafafa;
+$bg-soft: #f8fafc;
+$bg-page: #f0f2f8;
 
-$radius-sm:     5px;
-$radius:        7px;
-$radius-md:     8px;
-$radius-lg:     10px;
-$radius-xl:     14px;
+$radius-sm: 5px;
+$radius: 7px;
+$radius-md: 8px;
+$radius-lg: 10px;
+$radius-xl: 14px;
 
-$font-family:   system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
-$font-mono:     ui-monospace, "Cascadia Code", "Fira Mono", monospace;
+$font-family:
+  system-ui,
+  -apple-system,
+  "Segoe UI",
+  Arial,
+  sans-serif;
+$font-mono: ui-monospace, "Cascadia Code", "Fira Mono", monospace;
+
+// 字級：全 UI 不小於 12px；內文／對話略大於輔助字
+$font-size-min: 12px;
+$font-size-body: 15px;
 
 // ═══════════════════════════════════════════════════════
 //  Mixins
@@ -63,9 +72,16 @@ $font-mono:     ui-monospace, "Cascadia Code", "Fira Mono", monospace;
 @mixin scrollbar-thin($thumb: #a5b4fc, $track: $bg-white) {
   scrollbar-width: thin;
   scrollbar-color: $thumb $track;
-  &::-webkit-scrollbar       { width: 4px; }
-  &::-webkit-scrollbar-track { background: $track; }
-  &::-webkit-scrollbar-thumb { background: $thumb; border-radius: 4px; }
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+  &::-webkit-scrollbar-track {
+    background: $track;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: $thumb;
+    border-radius: 4px;
+  }
 }
 
 @mixin btn-base {
@@ -74,10 +90,15 @@ $font-mono:     ui-monospace, "Cascadia Code", "Fira Mono", monospace;
   padding: 8px 12px;
   cursor: pointer;
   font-family: $font-family;
-  font-size: 12px;
+  font-size: $font-size-min;
   font-weight: 600;
-  transition: background 0.15s, opacity 0.15s;
-  &:disabled { opacity: 0.45; cursor: not-allowed; }
+  transition:
+    background 0.15s,
+    opacity 0.15s;
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
 }
 
 @mixin input-base {
@@ -85,7 +106,7 @@ $font-mono:     ui-monospace, "Cascadia Code", "Fira Mono", monospace;
   border: 1px solid $border-strong;
   border-radius: $radius;
   padding: 6px 9px;
-  font-size: 12px;
+  font-size: $font-size-min;
   font-family: $font-family;
   color: $text-primary;
   background: $bg-white;
@@ -100,14 +121,18 @@ $font-mono:     ui-monospace, "Cascadia Code", "Fira Mono", monospace;
 // ═══════════════════════════════════════════════════════
 //  Base Reset
 // ═══════════════════════════════════════════════════════
-*, *::before, *::after { box-sizing: border-box; }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
 
 body {
   margin: 0;
   background: $bg-page;
   color: $text-primary;
   font-family: $font-family;
-  font-size: 13px;
+  font-size: $font-size-body;
 }
 
 // Utility: classList.toggle('hidden') — must beat component rules (e.g. exec-step-response)
@@ -119,13 +144,20 @@ button {
   @include btn-base;
 }
 
-input, textarea, select {
+input,
+textarea,
+select {
   @include input-base;
 }
 
-textarea { resize: vertical; }
+textarea {
+  resize: vertical;
+}
 
-select { appearance: auto; cursor: pointer; }
+select {
+  appearance: auto;
+  cursor: pointer;
+}
 
 // ═══════════════════════════════════════════════════════
 //  Shell
@@ -146,7 +178,7 @@ select { appearance: auto; cursor: pointer; }
   color: #fff;
   padding: 10px 14px 8px;
   flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(79, 70, 229, .25);
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
 }
 
 .chat-header-top {
@@ -156,10 +188,36 @@ select { appearance: auto; cursor: pointer; }
   gap: 8px;
 }
 
+.chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .chat-header-title {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 800;
   letter-spacing: 0.2px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dock-close-btn {
+  border: 0;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 10px 4px;
+  border-radius: $radius-md;
+  flex-shrink: 0;
+  &:hover {
+    background: rgba(255, 255, 255, 0.22);
+  }
 }
 
 .chat-header-meta {
@@ -170,14 +228,14 @@ select { appearance: auto; cursor: pointer; }
 }
 
 .auth-status-text {
-  font-size: 11px;
-  color: rgba(255, 255, 255, .85);
+  font-size: $font-size-min;
+  color: rgba(255, 255, 255, 0.85);
   margin: 0;
 }
 
 .oauth-info {
-  font-size: 10px;
-  color: rgba(255, 255, 255, .65);
+  font-size: $font-size-min;
+  color: rgba(255, 255, 255, 0.65);
   margin: 0;
   font-family: $font-mono;
   white-space: nowrap;
@@ -186,23 +244,30 @@ select { appearance: auto; cursor: pointer; }
 }
 
 .auth-btn {
-  background: rgba(255, 255, 255, .15);
+  background: rgba(255, 255, 255, 0.15);
   color: #fff;
-  border: 1px solid rgba(255, 255, 255, .35);
-  font-size: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  font-size: $font-size-min;
   font-weight: 700;
   padding: 6px 12px;
   border-radius: $radius-md;
   flex-shrink: 0;
-  &:hover { background: rgba(255, 255, 255, .25); }
+  &:hover {
+    background: rgba(255, 255, 255, 0.25);
+  }
   &.pulsing {
     animation: auth-pulse 1s ease-in-out infinite;
   }
 }
 
 @keyframes auth-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, .4); }
-  50%       { box-shadow: 0 0 0 6px rgba(255, 255, 255, 0); }
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(255, 255, 255, 0);
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -217,16 +282,22 @@ select { appearance: auto; cursor: pointer; }
   color: #fff;
   padding: 7px 16px;
   border-radius: 20px;
-  font-size: 12px;
+  font-size: $font-size-min;
   font-weight: 600;
   z-index: 9999;
   pointer-events: none;
   white-space: nowrap;
-  box-shadow: 0 4px 16px rgba(0,0,0,.25);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
   transition: opacity 0.3s;
-  &.hidden { display: none; }
-  &.error   { background: $danger; }
-  &.success { background: $success; }
+  &.hidden {
+    display: none;
+  }
+  &.error {
+    background: $danger;
+  }
+  &.success {
+    background: $success;
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -251,10 +322,35 @@ select { appearance: auto; cursor: pointer; }
     align-items: start;
     gap: 10px;
 
-    #toastStatus    { grid-area: toast; }
-    .chat-section   { grid-area: chat;     overflow-y: auto; max-height: calc(100vh - 80px); }
-    .workflow-section { grid-area: workflow; overflow-y: auto; max-height: calc(100vh - 80px); border-left: 1px solid $border; border-radius: 0; }
+    #toastStatus {
+      grid-area: toast;
+    }
+    .chat-section {
+      grid-area: chat;
+      overflow-y: auto;
+      max-height: calc(100vh - 80px);
+    }
+    .workflow-section {
+      grid-area: workflow;
+      overflow-y: auto;
+      max-height: calc(100vh - 80px);
+      border-left: 1px solid $border;
+      border-radius: 0;
+    }
   }
+}
+
+// 未授權：panel 內僅區塊收合鈕可點（Google 授權、關閉 dock 在 header 外不受影響）
+.panel-body--auth-locked * {
+  pointer-events: none;
+}
+
+.panel-body--auth-locked .chat-section-toggle,
+.panel-body--auth-locked .workflow-toggle,
+.panel-body--auth-locked .sub-toggle,
+.panel-body--auth-locked .exec-workflow-toggle {
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -264,7 +360,7 @@ select { appearance: auto; cursor: pointer; }
 .workflow-section {
   border-radius: $radius-lg;
   background: $bg-white;
-  box-shadow: 0 1px 6px rgba(0,0,0,.07);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.07);
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -278,14 +374,16 @@ select { appearance: auto; cursor: pointer; }
   padding: 10px 14px;
   background: linear-gradient(90deg, $primary 0%, $violet 100%);
   color: #fff;
-  font-size: 13px;
+  font-size: $font-size-min;
   font-weight: 700;
   border: none;
   border-radius: $radius-lg $radius-lg 0 0;
   cursor: pointer;
   letter-spacing: 0.3px;
   flex-shrink: 0;
-  &:hover { background: linear-gradient(90deg, $primary-dark, $violet-dark); }
+  &:hover {
+    background: linear-gradient(90deg, $primary-dark, $violet-dark);
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -295,7 +393,9 @@ select { appearance: auto; cursor: pointer; }
   display: block;
   padding: 12px;
   flex: 1;
-  &.collapsed { display: none; }
+  &.collapsed {
+    display: none;
+  }
 }
 
 .chat-messages {
@@ -305,15 +405,15 @@ select { appearance: auto; cursor: pointer; }
   padding: 10px;
   overflow-y: auto;
   min-height: 80px;
-  height: 220px;
+  height: 400px;
   display: block;
   @include scrollbar-thin(#a5b4fc, $bg-canvas);
 
-  @media (max-width: 519px) { max-height: 30vh; }
-
   > .message-row {
     margin-bottom: 8px;
-    &:last-child { margin-bottom: 0; }
+    &:last-child {
+      margin-bottom: 0;
+    }
   }
 }
 
@@ -335,8 +435,12 @@ select { appearance: auto; cursor: pointer; }
     background: #c7d2fe;
     border-radius: 2px;
   }
-  &:hover { background: #d1d5db; }
-  &:active { background: #a5b4fc; }
+  &:hover {
+    background: #d1d5db;
+  }
+  &:active {
+    background: #a5b4fc;
+  }
 }
 
 // ── Messages ──
@@ -344,8 +448,14 @@ select { appearance: auto; cursor: pointer; }
   display: flex;
   flex-direction: column;
   max-width: 92%;
-  &.user     { margin-left: auto;  align-items: flex-end; }
-  &.assistant { margin-right: auto; align-items: flex-start; }
+  &.user {
+    margin-left: auto;
+    align-items: flex-end;
+  }
+  &.assistant {
+    margin-right: auto;
+    align-items: flex-start;
+  }
 }
 
 .message-bubble {
@@ -353,20 +463,31 @@ select { appearance: auto; cursor: pointer; }
   padding: 8px 11px;
   line-height: 1.55;
   word-break: break-word;
-  font-size: 12.5px;
+  font-size: $font-size-body;
 
-  .message-row.user &     { background: $primary; color: #fff; }
+  .message-row.user & {
+    background: $primary;
+    color: #fff;
+  }
   .message-row.assistant & {
     background: $primary-light;
     color: $text-primary;
-    p, ul, ol, li { margin: 0 0 6px; }
-    p:last-child, li:last-child { margin-bottom: 0; }
+    p,
+    ul,
+    ol,
+    li {
+      margin: 0 0 6px;
+    }
+    p:last-child,
+    li:last-child {
+      margin-bottom: 0;
+    }
     code {
-      background: rgba(79,70,229,.08);
+      background: rgba(79, 70, 229, 0.08);
       padding: 1px 4px;
       border-radius: 3px;
       font-family: $font-mono;
-      font-size: 11px;
+      font-size: $font-size-min;
     }
     pre {
       background: #1e1e2e;
@@ -374,16 +495,18 @@ select { appearance: auto; cursor: pointer; }
       padding: 8px;
       border-radius: $radius;
       overflow-x: auto;
-      font-size: 11px;
+      font-size: $font-size-min;
       margin: 4px 0;
     }
-    strong { font-weight: 700; }
+    strong {
+      font-weight: 700;
+    }
   }
 }
 
 .message-meta {
   margin-top: 3px;
-  font-size: 10px;
+  font-size: $font-size-min;
   color: $text-faint;
 }
 
@@ -396,11 +519,13 @@ select { appearance: auto; cursor: pointer; }
   display: flex;
   flex-direction: column;
   gap: 6px;
-  &.hidden { display: none; }
+  &.hidden {
+    display: none;
+  }
 }
 
 .skill-confirm-text {
-  font-size: 11px;
+  font-size: $font-size-min;
   color: $primary;
   font-weight: 600;
 }
@@ -408,10 +533,27 @@ select { appearance: auto; cursor: pointer; }
 .skill-confirm-actions {
   display: flex;
   gap: 6px;
-  #skillUse  { flex: 1; background: $primary; color: #fff; font-size: 11px; padding: 5px; }
-  #skillSkip { flex: 1; background: #f3f4f6; color: $text-sub; border: 1px solid $border; font-size: 11px; padding: 5px; }
-  #skillUse:hover  { background: $primary-dark; }
-  #skillSkip:hover { background: $border-faint; }
+  #skillUse {
+    flex: 1;
+    background: $primary;
+    color: #fff;
+    font-size: $font-size-min;
+    padding: 5px;
+  }
+  #skillSkip {
+    flex: 1;
+    background: #f3f4f6;
+    color: $text-sub;
+    border: 1px solid $border;
+    font-size: $font-size-min;
+    padding: 5px;
+  }
+  #skillUse:hover {
+    background: $primary-dark;
+  }
+  #skillSkip:hover {
+    background: $border-faint;
+  }
 }
 
 // ── Chat input form ──
@@ -424,9 +566,15 @@ select { appearance: auto; cursor: pointer; }
     min-height: 64px;
     max-height: 160px;
     resize: vertical;
-    font-size: 12.5px;
-    &:disabled { background: #f9fafb; color: $text-faint; cursor: not-allowed; }
-    &::placeholder { color: $text-faint; }
+    font-size: $font-size-body;
+    &:disabled {
+      background: #f9fafb;
+      color: $text-faint;
+      cursor: not-allowed;
+    }
+    &::placeholder {
+      color: $text-faint;
+    }
   }
 }
 
@@ -437,19 +585,26 @@ select { appearance: auto; cursor: pointer; }
   #sendMessage {
     background: linear-gradient(90deg, $primary, $violet);
     color: #fff;
-    font-size: 13px;
+    font-size: $font-size-min;
     font-weight: 700;
     padding: 9px;
-    &:hover { background: linear-gradient(90deg, $primary-dark, $violet-dark); }
-    &:disabled { opacity: 0.45; cursor: not-allowed; }
+    &:hover {
+      background: linear-gradient(90deg, $primary-dark, $violet-dark);
+    }
+    &:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
   }
   #clearChat {
     background: #f3f4f6;
     color: $text-muted;
     border: 1px solid $border;
     padding: 9px 14px;
-    font-size: 12px;
-    &:hover { background: $border-faint; }
+    font-size: $font-size-min;
+    &:hover {
+      background: $border-faint;
+    }
   }
 }
 
@@ -461,11 +616,13 @@ select { appearance: auto; cursor: pointer; }
   display: flex;
   flex-direction: column;
   gap: 8px;
-  &.collapsed { display: none; }
+  &.collapsed {
+    display: none;
+  }
 }
 
 .workflow-subtitle {
-  font-size: 10px;
+  font-size: $font-size-min;
   font-weight: 700;
   color: $text-faint;
   letter-spacing: 0.5px;
@@ -487,7 +644,7 @@ select { appearance: auto; cursor: pointer; }
   padding: 9px 13px;
   background: $bg-soft;
   color: $text-sub;
-  font-size: 12px;
+  font-size: $font-size-min;
   font-weight: 600;
   border: none;
   border-radius: 0;
@@ -496,7 +653,9 @@ select { appearance: auto; cursor: pointer; }
   display: flex;
   align-items: center;
   gap: 6px;
-  &:hover { background: $border-faint; }
+  &:hover {
+    background: $border-faint;
+  }
 }
 
 .sub-panel {
@@ -510,12 +669,16 @@ select { appearance: auto; cursor: pointer; }
 
 // Collapsed — must override any display set by ID selectors
 .sub-panel.collapsed,
-#manualApiPanel.sub-panel.collapsed { display: none !important; }
+#manualApiPanel.sub-panel.collapsed {
+  display: none !important;
+}
 
 // ═══════════════════════════════════════════════════════
 //  Execution result section header (special layout)
 // ═══════════════════════════════════════════════════════
-#executionResultSection { overflow: visible; }
+#executionResultSection {
+  overflow: visible;
+}
 
 .exec-result-header {
   display: flex;
@@ -534,16 +697,18 @@ select { appearance: auto; cursor: pointer; }
   padding: 9px 13px;
   background: transparent;
   color: $text-sub;
-  font-size: 12px;
+  font-size: $font-size-min;
   font-weight: 600;
   border: none;
   border-radius: 0;
   cursor: pointer;
-  &:hover { background: $border-faint; }
+  &:hover {
+    background: $border-faint;
+  }
 }
 
 .exec-result-clear {
-  font-size: 10px;
+  font-size: $font-size-min;
   padding: 4px 12px;
   background: $danger-bg;
   color: $danger;
@@ -551,7 +716,9 @@ select { appearance: auto; cursor: pointer; }
   border-left: 1px solid $danger-light;
   border-radius: 0;
   margin: 0;
-  &:hover { background: $danger-light; }
+  &:hover {
+    background: $danger-light;
+  }
 }
 
 #executionResultPanel {
@@ -563,7 +730,9 @@ select { appearance: auto; cursor: pointer; }
   display: flex;
   flex-direction: column;
   gap: 6px;
-  &.collapsed { display: none; }
+  &.collapsed {
+    display: none;
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -572,7 +741,7 @@ select { appearance: auto; cursor: pointer; }
 #manualApiCurl {
   min-height: 80px;
   font-family: $font-mono;
-  font-size: 11px;
+  font-size: $font-size-min;
   background: #1e1e2e;
   color: #cdd6f4;
   border-color: #3b3d5c;
@@ -585,11 +754,13 @@ select { appearance: auto; cursor: pointer; }
   background: $blue-bg;
   color: $blue;
   border: 1px solid $blue-ring;
-  font-size: 12px;
+  font-size: $font-size-min;
   font-weight: 700;
   padding: 7px;
   border-radius: $radius;
-  &:hover { background: $blue-light; }
+  &:hover {
+    background: $blue-light;
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -601,19 +772,25 @@ select { appearance: auto; cursor: pointer; }
   grid-template-areas:
     "name    method"
     "path    path"
+    "plabel  plabel"
+    "prows   prows"
+    "padd    padd"
     "hlabel  hlabel"
     "hrows   hrows"
     "hadd    hadd"
     "body    body"
     "purpose purpose"
     "savebtn savebtn"
-    "actions actions";
+    "actions actions"
+    "clearbtn clearbtn";
   gap: 7px;
   padding: 10px 12px;
 }
 
-#manualApiName    { grid-area: name; }
-#manualApiMethod  {
+#manualApiName {
+  grid-area: name;
+}
+#manualApiMethod {
   grid-area: method;
   width: 90px;
   font-weight: 700;
@@ -624,12 +801,13 @@ select { appearance: auto; cursor: pointer; }
   cursor: pointer;
   appearance: auto;
 }
-#manualApiPath    { grid-area: path; }
+#manualApiPath {
+  grid-area: path;
+}
 
-.workflow-subtitle.headers-label,
-#manualApiPanel .workflow-subtitle {
-  grid-area: hlabel;
-  font-size: 10px;
+.workflow-subtitle.params-label {
+  grid-area: plabel;
+  font-size: $font-size-min;
   font-weight: 700;
   color: $text-muted;
   letter-spacing: 0.4px;
@@ -638,12 +816,52 @@ select { appearance: auto; cursor: pointer; }
   padding: 0;
 }
 
-#manualApiHeadersRows { grid-area: hrows; display: flex; flex-direction: column; gap: 4px; }
-#addHeaderRow         { grid-area: hadd; }
-#manualApiBody        { grid-area: body; min-height: 72px; }
-#manualApiPurpose     { grid-area: purpose; }
-#addManualApi         { grid-area: savebtn; }
-#manualApiActions     { grid-area: actions; }
+.workflow-subtitle.headers-label,
+#manualApiPanel .workflow-subtitle {
+  grid-area: hlabel;
+  font-size: $font-size-min;
+  font-weight: 700;
+  color: $text-muted;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  margin: 0;
+  padding: 0;
+}
+
+#manualApiHeadersRows {
+  grid-area: hrows;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+#addHeaderRow {
+  grid-area: hadd;
+}
+#manualApiParamsRows {
+  grid-area: prows;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+#addParamRow {
+  grid-area: padd;
+}
+#manualApiBody {
+  grid-area: body;
+  min-height: 72px;
+}
+#manualApiPurpose {
+  grid-area: purpose;
+}
+#addManualApi {
+  grid-area: savebtn;
+}
+#manualApiActions {
+  grid-area: actions;
+}
+#clearManualApi {
+  grid-area: clearbtn;
+}
 
 // ── Header rows in form ──
 .header-row {
@@ -663,7 +881,7 @@ select { appearance: auto; cursor: pointer; }
 .header-key-select {
   flex: 1;
   padding: 4px 5px;
-  font-size: 11px;
+  font-size: $font-size-min;
   border: 1px solid $border-strong;
   border-radius: $radius-sm;
   font-family: $font-family;
@@ -676,17 +894,19 @@ select { appearance: auto; cursor: pointer; }
   display: none;
   flex: 1;
   padding: 4px 5px;
-  font-size: 11px;
+  font-size: $font-size-min;
   border: 1px solid $border-strong;
   border-radius: $radius-sm;
   font-family: $font-family;
   min-width: 0;
-  &.visible { display: block; }
+  &.visible {
+    display: block;
+  }
 }
 
 .header-value {
   padding: 4px 6px;
-  font-size: 11px;
+  font-size: $font-size-min;
   border: 1px solid $border-strong;
   border-radius: $radius-sm;
   font-family: $font-family;
@@ -694,7 +914,7 @@ select { appearance: auto; cursor: pointer; }
 }
 
 .header-remove {
-  font-size: 10px;
+  font-size: $font-size-min;
   padding: 3px 6px;
   background: $danger-bg;
   color: $danger;
@@ -704,7 +924,7 @@ select { appearance: auto; cursor: pointer; }
 }
 
 #addHeaderRow {
-  font-size: 11px;
+  font-size: $font-size-min;
   padding: 5px 8px;
   background: $bg-soft;
   color: $text-sub;
@@ -712,32 +932,54 @@ select { appearance: auto; cursor: pointer; }
   border-radius: $radius;
   width: 100%;
   text-align: center;
-  &:hover { background: $border-faint; border-color: $primary; color: $primary; }
+  &:hover {
+    background: $border-faint;
+    border-color: $primary;
+    color: $primary;
+  }
 }
 
 #addManualApi {
   width: 100%;
   background: $primary;
   color: #fff;
-  font-size: 12px;
+  font-size: $font-size-min;
   font-weight: 700;
   padding: 7px;
   border-radius: $radius;
   display: none;
-  &:hover { background: $primary-dark; }
+  &:hover {
+    background: $primary-dark;
+  }
+}
+
+#clearManualApi {
+  width: 100%;
+  background: #f3f4f6;
+  color: #4b5563;
+  border: 1px solid #d1d5db;
+  font-size: $font-size-min;
+  font-weight: 600;
+  padding: 7px;
+  border-radius: $radius;
+  &:hover {
+    background: #e5e7eb;
+  }
 }
 
 // ── Manual API action buttons (save / add-to-step) ──
 .manual-api-actions {
   display: flex;
   gap: 6px;
-  &.hidden { display: none; }
+  &.hidden {
+    display: none;
+  }
 }
 
 .pending-api-save,
 .pending-api-step {
   flex: 1;
-  font-size: 11px;
+  font-size: $font-size-min;
   padding: 7px 8px;
   border-radius: $radius;
   font-weight: 600;
@@ -747,14 +989,18 @@ select { appearance: auto; cursor: pointer; }
   background: $success-bg;
   color: $success;
   border: 1px solid $success-ring;
-  &:hover { background: $success-light; }
+  &:hover {
+    background: $success-light;
+  }
 }
 
 .pending-api-step {
   background: $primary-light;
   color: $primary-dark;
   border: 1px solid #c7d2fe;
-  &:hover { background: #e0e7ff; }
+  &:hover {
+    background: #e0e7ff;
+  }
 }
 
 // ── Field validation ──
@@ -764,7 +1010,7 @@ select { appearance: auto; cursor: pointer; }
 }
 
 .field-error-hint {
-  font-size: 10px;
+  font-size: $font-size-min;
   color: #ef4444;
   margin-top: 1px;
 }
@@ -773,7 +1019,7 @@ select { appearance: auto; cursor: pointer; }
 //  API zone label
 // ═══════════════════════════════════════════════════════
 .api-zone-label {
-  font-size: 10px;
+  font-size: $font-size-min;
   font-weight: 700;
   color: $text-faint;
   letter-spacing: 0.5px;
@@ -804,22 +1050,36 @@ select { appearance: auto; cursor: pointer; }
     background: $bg-soft;
     border: 1px solid $border;
     border-radius: $radius;
-    font-size: 11px;
+    font-size: $font-size-min;
     cursor: pointer;
     display: flex;
     flex-direction: column;
     gap: 2px;
     transition: all 0.1s;
-    &:hover  { background: $primary-light; border-color: #a5b4fc; }
-    &.active { background: $primary-light; border-color: $primary; color: $primary-dark; box-shadow: 0 0 0 2px $primary-ring; }
+    &:hover {
+      background: $primary-light;
+      border-color: #a5b4fc;
+    }
+    &.active {
+      background: $primary-light;
+      border-color: $primary;
+      color: $primary-dark;
+      box-shadow: 0 0 0 2px $primary-ring;
+    }
   }
 
-  .api-candidate-name    { font-weight: 700; font-size: 11px; }
-  .api-candidate-purpose { font-size: 10px; color: $text-muted; }
+  .api-candidate-name {
+    font-weight: 700;
+    font-size: $font-size-min;
+  }
+  .api-candidate-purpose {
+    font-size: $font-size-min;
+    color: $text-muted;
+  }
 
   .api-candidate-remove,
   .api-candidate-save {
-    font-size: 10px;
+    font-size: $font-size-min;
     padding: 0 6px;
     border-radius: $radius;
     align-self: center;
@@ -829,8 +1089,16 @@ select { appearance: auto; cursor: pointer; }
     align-items: center;
   }
 
-  .api-candidate-remove { background: $danger-bg;  color: $danger;  border: 1px solid $danger-light; }
-  .api-candidate-save   { background: $success-bg; color: $success; border: 1px solid $success-ring; }
+  .api-candidate-remove {
+    background: $danger-bg;
+    color: $danger;
+    border: 1px solid $danger-light;
+  }
+  .api-candidate-save {
+    background: $success-bg;
+    color: $success;
+    border: 1px solid $success-ring;
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -863,20 +1131,20 @@ select { appearance: auto; cursor: pointer; }
 }
 
 .api-detail-badge {
-  font-size: 10px;
+  font-size: $font-size-min;
   font-weight: 700;
-  color: rgba(255,255,255,.8);
+  color: rgba(255, 255, 255, 0.8);
   letter-spacing: 0.5px;
   text-transform: uppercase;
   flex-shrink: 0;
-  background: rgba(255,255,255,.18);
+  background: rgba(255, 255, 255, 0.18);
   padding: 2px 7px;
   border-radius: 20px;
   white-space: nowrap;
 }
 
 .api-detail-name {
-  font-size: 12px;
+  font-size: $font-size-min;
   font-weight: 700;
   color: #fff;
   white-space: nowrap;
@@ -886,15 +1154,18 @@ select { appearance: auto; cursor: pointer; }
 
 .api-detail-cancel {
   flex-shrink: 0;
-  background: rgba(255,255,255,.15);
-  color: rgba(255,255,255,.9);
-  border: 1px solid rgba(255,255,255,.3);
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: $radius;
   padding: 3px 9px;
-  font-size: 11px;
+  font-size: $font-size-min;
   font-weight: 700;
   line-height: 1.4;
-  &:hover { background: rgba(255,255,255,.28); color: #fff; }
+  &:hover {
+    background: rgba(255, 255, 255, 0.28);
+    color: #fff;
+  }
 }
 
 #apiDetailPurpose {
@@ -909,7 +1180,7 @@ select { appearance: auto; cursor: pointer; }
 }
 
 .api-detail-purpose-label {
-  font-size: 10px;
+  font-size: $font-size-min;
   font-weight: 700;
   color: $text-muted;
   letter-spacing: 0.4px;
@@ -918,7 +1189,7 @@ select { appearance: auto; cursor: pointer; }
 
 .api-detail-purpose-input {
   width: 100%;
-  font-size: 12px;
+  font-size: $font-size-min;
   border: 1px solid $border-strong;
   border-radius: 6px;
   padding: 6px 9px;
@@ -932,10 +1203,14 @@ select { appearance: auto; cursor: pointer; }
   }
 }
 
-.detail-sections { display: flex; flex-direction: column; gap: 4px; }
+.detail-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 
 .detail-url-code {
-  font-size: 10px;
+  font-size: $font-size-min;
   background: #1e1e2e;
   color: #a6e3a1;
   border-radius: $radius-sm;
@@ -957,22 +1232,30 @@ select { appearance: auto; cursor: pointer; }
   padding: 5px 9px;
   background: $bg-soft;
   color: $text-sub;
-  font-size: 11px;
+  font-size: $font-size-min;
   font-weight: 600;
   border: none;
   cursor: pointer;
   transition: background 0.1s;
-  &:hover { background: $border-faint; }
+  &:hover {
+    background: $border-faint;
+  }
 }
 
 .detail-section-body {
   padding: 6px;
   background: $bg-white;
   border-top: 1px solid $border-faint;
-  &.collapsed { display: none; }
+  &.collapsed {
+    display: none;
+  }
 }
 
-.detail-edit-list { display: flex; flex-direction: column; gap: 4px; }
+.detail-edit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 
 .detail-edit-row {
   display: grid;
@@ -985,7 +1268,7 @@ select { appearance: auto; cursor: pointer; }
 }
 
 .detail-edit-key {
-  font-size: 10px;
+  font-size: $font-size-min;
   font-weight: 700;
   color: $text-muted;
 }
@@ -993,7 +1276,7 @@ select { appearance: auto; cursor: pointer; }
 .detail-edit-input,
 .detail-edit-key-input,
 .detail-edit-val-input {
-  font-size: 11px;
+  font-size: $font-size-min;
   border: 1px solid $border;
   border-radius: $radius-sm;
   padding: 4px 7px;
@@ -1011,20 +1294,24 @@ select { appearance: auto; cursor: pointer; }
 .detail-add-row-btn {
   width: 100%;
   margin-top: 4px;
-  font-size: 10px;
+  font-size: $font-size-min;
   padding: 4px 8px;
   background: $bg-soft;
   color: $text-sub;
   border: 1px dashed $border-strong;
   border-radius: $radius-sm;
   text-align: center;
-  &:hover { background: $border-faint; border-color: $primary; color: $primary; }
+  &:hover {
+    background: $border-faint;
+    border-color: $primary;
+    color: $primary;
+  }
 }
 
 .detail-edit-body {
   width: 100%;
   min-height: 60px;
-  font-size: 11px;
+  font-size: $font-size-min;
   border: 1px solid $border;
   border-radius: $radius-sm;
   padding: 4px 7px;
@@ -1032,7 +1319,11 @@ select { appearance: auto; cursor: pointer; }
   font-family: $font-mono;
 }
 
-.detail-empty { font-size: 11px; color: $text-faint; padding: 2px 0; }
+.detail-empty {
+  font-size: $font-size-min;
+  color: $text-faint;
+  padding: 2px 0;
+}
 
 // ═══════════════════════════════════════════════════════
 //  Draft steps section wrapper
@@ -1066,13 +1357,17 @@ select { appearance: auto; cursor: pointer; }
   margin: 0 12px 12px;
   background: linear-gradient(90deg, $primary, $violet);
   color: #fff;
-  font-size: 12px;
+  font-size: $font-size-min;
   font-weight: 700;
   padding: 10px 8px;
   border-radius: $radius-md;
-  box-shadow: 0 1px 4px rgba(79,70,229,.25);
-  &:hover    { background: linear-gradient(90deg, $primary-dark, $violet-dark); }
-  &.updating { background: linear-gradient(90deg, $amber, $amber-dark); }
+  box-shadow: 0 1px 4px rgba(79, 70, 229, 0.25);
+  &:hover {
+    background: linear-gradient(90deg, $primary-dark, $violet-dark);
+  }
+  &.updating {
+    background: linear-gradient(90deg, $amber, $amber-dark);
+  }
 }
 
 // API 設定底部按鈕：上方主按鈕、下方兩顆次按鈕
@@ -1090,7 +1385,7 @@ select { appearance: auto; cursor: pointer; }
 
   .pending-api-save,
   .pending-api-step {
-    font-size: 12px;
+    font-size: $font-size-min;
     padding: 9px 10px;
     min-height: 38px;
     display: flex;
@@ -1121,7 +1416,10 @@ select { appearance: auto; cursor: pointer; }
   border: 1px solid $border;
   border-radius: $radius-md;
   transition: border-color 0.15s;
-  &.editing { border-color: $amber; background: $amber-bg; }
+  &.editing {
+    border-color: $amber;
+    background: $amber-bg;
+  }
 }
 
 .draft-step-info {
@@ -1132,14 +1430,31 @@ select { appearance: auto; cursor: pointer; }
   min-width: 0;
 }
 
-.draft-step-num     { font-size: 10px; color: $text-faint; }
-.draft-step-title   { font-size: 12px; font-weight: 700; color: $text-primary; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.draft-step-purpose { font-size: 10px; color: $text-muted; }
+.draft-step-num {
+  font-size: $font-size-min;
+  color: $text-faint;
+}
+.draft-step-title {
+  font-size: $font-size-min;
+  font-weight: 700;
+  color: $text-primary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.draft-step-purpose {
+  font-size: $font-size-min;
+  color: $text-muted;
+}
 
-.draft-step-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.draft-step-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
 
 .draft-step-edit {
-  font-size: 10px;
+  font-size: $font-size-min;
   padding: 3px 8px;
   background: $primary-light;
   color: $primary-dark;
@@ -1148,13 +1463,16 @@ select { appearance: auto; cursor: pointer; }
 }
 
 .draft-step-delete {
-  font-size: 10px;
+  font-size: $font-size-min;
   padding: 3px 8px;
   background: $danger-bg;
   color: $danger;
   border: 1px solid $danger-light;
   border-radius: $radius-sm;
-  &:disabled { opacity: 0.4; cursor: not-allowed; }
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
 }
 
 // ── Draft action buttons (3-column grid) ──
@@ -1164,14 +1482,45 @@ select { appearance: auto; cursor: pointer; }
   gap: 6px;
 }
 
-#runWorkflow  { background: $primary; color: #fff; font-weight: 700; font-size: 11px; padding: 8px 4px; &:hover { background: $primary-dark; } }
-#saveWorkflow { background: $success-bg; color: $success; border: 1px solid $success-ring; font-size: 11px; padding: 8px 4px; &:hover { background: $success-light; } }
-#clearDraft   { background: #f3f4f6; color: $text-muted; border: 1px solid $border; font-size: 11px; padding: 8px 4px; &:hover { background: $border-light; } }
+#runWorkflow {
+  background: $primary;
+  color: #fff;
+  font-weight: 700;
+  font-size: $font-size-min;
+  padding: 8px 4px;
+  &:hover {
+    background: $primary-dark;
+  }
+}
+#saveWorkflow {
+  background: $success-bg;
+  color: $success;
+  border: 1px solid $success-ring;
+  font-size: $font-size-min;
+  padding: 8px 4px;
+  &:hover {
+    background: $success-light;
+  }
+}
+#clearDraft {
+  background: #f3f4f6;
+  color: $text-muted;
+  border: 1px solid $border;
+  font-size: $font-size-min;
+  padding: 8px 4px;
+  &:hover {
+    background: $border-light;
+  }
+}
 
 // ═══════════════════════════════════════════════════════
 //  Saved workflows
 // ═══════════════════════════════════════════════════════
-.saved-workflows { display: flex; flex-direction: column; gap: 5px; }
+.saved-workflows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
 
 .workflow-card {
   display: flex;
@@ -1182,12 +1531,15 @@ select { appearance: auto; cursor: pointer; }
   border-radius: $radius-md;
   background: $bg-canvas;
   transition: border-color 0.15s;
-  &:hover { border-color: #a5b4fc; background: $purple-bg; }
+  &:hover {
+    border-color: #a5b4fc;
+    background: $purple-bg;
+  }
 }
 
 .workflow-card-name {
   flex: 1;
-  font-size: 12px;
+  font-size: $font-size-min;
   font-weight: 700;
   color: $text-primary;
   min-width: 0;
@@ -1196,20 +1548,28 @@ select { appearance: auto; cursor: pointer; }
   text-overflow: ellipsis;
 }
 
-.workflow-card-steps { font-size: 10px; color: $text-muted; flex-shrink: 0; }
+.workflow-card-steps {
+  font-size: $font-size-min;
+  color: $text-muted;
+  flex-shrink: 0;
+}
 
 .workflow-card-actions {
   display: flex;
   gap: 4px;
   flex-shrink: 0;
   button {
-    font-size: 10px;
+    font-size: $font-size-min;
     padding: 3px 8px;
     border-radius: $radius-sm;
     background: $border-faint;
     color: $text-sub;
     border: 1px solid $border;
-    &:hover { background: #e0e7ff; color: $primary; border-color: #c7d2fe; }
+    &:hover {
+      background: #e0e7ff;
+      color: $primary;
+      border-color: #c7d2fe;
+    }
   }
 }
 
@@ -1217,7 +1577,9 @@ select { appearance: auto; cursor: pointer; }
   background: $danger-bg !important;
   color: $danger !important;
   border: 1px solid $danger-light !important;
-  &:hover { background: $danger-light !important; }
+  &:hover {
+    background: $danger-light !important;
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1231,7 +1593,9 @@ select { appearance: auto; cursor: pointer; }
   border: 1px solid $border;
   border-radius: $radius-md;
   background: $bg-canvas;
-  transition: border-color 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
 
   &.selected {
     border-color: $primary;
@@ -1246,10 +1610,16 @@ select { appearance: auto; cursor: pointer; }
   }
 }
 
-.saved-api-info { flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.saved-api-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
 
 .saved-api-name {
-  font-size: 12px;
+  font-size: $font-size-min;
   font-weight: 700;
   color: $text-primary;
   white-space: nowrap;
@@ -1258,7 +1628,7 @@ select { appearance: auto; cursor: pointer; }
 }
 
 .saved-api-purpose {
-  font-size: 10px;
+  font-size: $font-size-min;
   color: $text-muted;
   white-space: nowrap;
   overflow: hidden;
@@ -1270,13 +1640,17 @@ select { appearance: auto; cursor: pointer; }
   gap: 4px;
   flex-shrink: 0;
   button {
-    font-size: 10px;
+    font-size: $font-size-min;
     padding: 3px 8px;
     background: $border-faint;
     color: $text-sub;
     border: 1px solid $border;
     border-radius: $radius-sm;
-    &.active { background: $primary; color: #fff; border-color: $primary; }
+    &.active {
+      background: $primary;
+      color: #fff;
+      border-color: $primary;
+    }
   }
 
   .saved-api-card.editing & button:not(.saved-api-delete) {
@@ -1290,7 +1664,9 @@ select { appearance: auto; cursor: pointer; }
   background: $danger-bg !important;
   color: $danger !important;
   border: 1px solid $danger-light !important;
-  &:hover { background: $danger-light !important; }
+  &:hover {
+    background: $danger-light !important;
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1308,13 +1684,15 @@ select { appearance: auto; cursor: pointer; }
   text-align: left;
   padding: 8px 11px;
   background: $bg-soft;
-  font-size: 11px;
+  font-size: $font-size-min;
   font-weight: 700;
   color: $text-sub;
   border: none;
   cursor: pointer;
   transition: background 0.1s;
-  &:hover { background: $border-faint; }
+  &:hover {
+    background: $border-faint;
+  }
 }
 
 .exec-workflow-steps {
@@ -1322,7 +1700,9 @@ select { appearance: auto; cursor: pointer; }
   display: flex;
   flex-direction: column;
   gap: 4px;
-  &.collapsed { display: none; }
+  &.collapsed {
+    display: none;
+  }
 }
 
 .exec-step-row {
@@ -1334,8 +1714,14 @@ select { appearance: auto; cursor: pointer; }
   border: 1px solid $border;
   border-radius: $radius;
   background: $bg-canvas;
-  &.ok    { border-color: $success-ring; background: $success-bg; }
-  &.error { border-color: $danger-light; background: $danger-bg; }
+  &.ok {
+    border-color: $success-ring;
+    background: $success-bg;
+  }
+  &.error {
+    border-color: $danger-light;
+    background: $danger-bg;
+  }
 }
 
 .exec-step-left {
@@ -1346,17 +1732,27 @@ select { appearance: auto; cursor: pointer; }
   min-width: 0;
 }
 
-.exec-step-icon { font-size: 13px; flex-shrink: 0; }
-
-@keyframes spin-pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.35; }
+.exec-step-icon {
+  font-size: $font-size-min;
+  flex-shrink: 0;
 }
 
-.exec-step-icon.running { animation: spin-pulse 1s ease-in-out infinite; }
+@keyframes spin-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.exec-step-icon.running {
+  animation: spin-pulse 1s ease-in-out infinite;
+}
 
 .exec-step-label {
-  font-size: 11px;
+  font-size: $font-size-min;
   font-weight: 700;
   color: $text-primary;
   white-space: nowrap;
@@ -1365,7 +1761,7 @@ select { appearance: auto; cursor: pointer; }
 }
 
 .exec-step-status-text {
-  font-size: 10px;
+  font-size: $font-size-min;
   color: $text-muted;
   flex-shrink: 0;
   background: $border-faint;
@@ -1373,21 +1769,50 @@ select { appearance: auto; cursor: pointer; }
   padding: 1px 5px;
 }
 
-.exec-step-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.exec-step-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
 
 .exec-view-btn,
 .exec-copy-btn,
 .exec-save-api-btn {
-  font-size: 10px;
+  font-size: $font-size-min;
   padding: 3px 8px;
   border-radius: $radius-sm;
   white-space: nowrap;
   font-weight: 600;
 }
 
-.exec-view-btn     { background: $blue-bg;    color: $blue;         border: 1px solid $blue-ring;   &:hover { background: $blue-light; } }
-.exec-copy-btn     { background: $purple-bg;  color: $purple-text;  border: 1px solid $purple-ring; &:hover { background: $purple-light; } }
-.exec-save-api-btn { background: $success-bg; color: $success;      border: 1px solid $success-ring; &:hover { background: $success-light; } &:disabled { opacity: 0.5; cursor: not-allowed; } }
+.exec-view-btn {
+  background: $blue-bg;
+  color: $blue;
+  border: 1px solid $blue-ring;
+  &:hover {
+    background: $blue-light;
+  }
+}
+.exec-copy-btn {
+  background: $purple-bg;
+  color: $purple-text;
+  border: 1px solid $purple-ring;
+  &:hover {
+    background: $purple-light;
+  }
+}
+.exec-save-api-btn {
+  background: $success-bg;
+  color: $success;
+  border: 1px solid $success-ring;
+  &:hover {
+    background: $success-light;
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
 
 .exec-step-response {
   width: 100%;
@@ -1395,7 +1820,7 @@ select { appearance: auto; cursor: pointer; }
   overflow-y: auto;
   background: #1e1e2e;
   color: #cdd6f4;
-  font-size: 10px;
+  font-size: $font-size-min;
   padding: 8px;
   border-radius: $radius;
   white-space: pre-wrap;
@@ -1411,7 +1836,7 @@ select { appearance: auto; cursor: pointer; }
 .exec-confirm-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,.5);
+  background: rgba(0, 0, 0, 0.5);
   z-index: 999;
   display: flex;
   align-items: center;
@@ -1429,12 +1854,23 @@ select { appearance: auto; cursor: pointer; }
   display: flex;
   flex-direction: column;
   gap: 10px;
-  box-shadow: 0 12px 40px rgba(0,0,0,.25);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
 }
 
-.exec-confirm-title    { font-size: 14px; font-weight: 800; color: $text-primary; }
-.exec-confirm-subtitle { font-size: 11px; color: $text-muted; }
-.exec-confirm-steps    { display: flex; flex-direction: column; gap: 8px; }
+.exec-confirm-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: $text-primary;
+}
+.exec-confirm-subtitle {
+  font-size: $font-size-min;
+  color: $text-muted;
+}
+.exec-confirm-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 
 .exec-confirm-step {
   border: 1px solid $border;
@@ -1442,15 +1878,42 @@ select { appearance: auto; cursor: pointer; }
   padding: 9px;
 }
 
-.exec-confirm-step-name { font-size: 12px; font-weight: 700; color: $text-primary; margin-bottom: 6px; }
-.exec-confirm-label     { font-size: 10px; font-weight: 700; color: $text-muted; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 3px; }
+.exec-confirm-step-name {
+  font-size: $font-size-min;
+  font-weight: 700;
+  color: $text-primary;
+  margin-bottom: 6px;
+}
+.exec-confirm-label {
+  font-size: $font-size-min;
+  font-weight: 700;
+  color: $text-muted;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 3px;
+}
 
-.exec-confirm-params     { display: flex; flex-direction: column; gap: 3px; margin-bottom: 6px; }
-.exec-confirm-param-row  { display: flex; gap: 4px; align-items: center; }
-.exec-confirm-param-key  { font-size: 10px; font-weight: 700; color: $text-muted; min-width: 64px; flex-shrink: 0; }
+.exec-confirm-params {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 6px;
+}
+.exec-confirm-param-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.exec-confirm-param-key {
+  font-size: $font-size-min;
+  font-weight: 700;
+  color: $text-muted;
+  min-width: 64px;
+  flex-shrink: 0;
+}
 .exec-confirm-param-value {
   flex: 1;
-  font-size: 11px;
+  font-size: $font-size-min;
   border: 1px solid $border-strong;
   border-radius: $radius-sm;
   padding: 3px 7px;
@@ -1460,7 +1923,7 @@ select { appearance: auto; cursor: pointer; }
 .exec-confirm-body {
   width: 100%;
   min-height: 60px;
-  font-size: 11px;
+  font-size: $font-size-min;
   border: 1px solid $border-strong;
   border-radius: $radius;
   padding: 5px 7px;
@@ -1483,7 +1946,9 @@ select { appearance: auto; cursor: pointer; }
   padding: 9px;
   border-radius: $radius-md;
   font-weight: 600;
-  &:hover { background: $border-light; }
+  &:hover {
+    background: $border-light;
+  }
 }
 
 .exec-confirm-ok {
@@ -1493,5 +1958,7 @@ select { appearance: auto; cursor: pointer; }
   font-weight: 700;
   padding: 9px;
   border-radius: $radius-md;
-  &:hover { background: linear-gradient(90deg, $primary-dark, $violet-dark); }
+  &:hover {
+    background: linear-gradient(90deg, $primary-dark, $violet-dark);
+  }
 }

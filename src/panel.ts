@@ -13,7 +13,10 @@ declare const chrome:
           callback: (responseUrl?: string) => void,
         ) => void;
       };
-      runtime?: { lastError?: { message?: string } };
+      runtime?: {
+        lastError?: { message?: string };
+        sendMessage: (message: { type: string }) => void;
+      };
       storage?: {
         local?: {
           get: (keys: string[]) => Promise<Record<string, unknown>>;
@@ -88,6 +91,14 @@ const CUSTOM_APIS_KEY = "customApis";
 const MAX_MESSAGES = 40;
 const GOOGLE_OAUTH_CLIENT_ID = "";
 const GOOGLE_OAUTH_SCOPE = "openid email profile";
+/** 僅允許此 Google Workspace 網域使用本擴充（OAuth userinfo 之 email） */
+const ALLOWED_GOOGLE_EMAIL_SUFFIX = "";
+
+function isAllowedAiiiEmail(email: string): boolean {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized.includes("@")) return false;
+  return normalized.endsWith(ALLOWED_GOOGLE_EMAIL_SUFFIX);
+}
 // TODO: 需要替換
 const FIREBASE_WEB_API_KEY = "";
 const AGENT_CHAT_API = "";
@@ -101,6 +112,7 @@ const sendMessageButton = document.getElementById("sendMessage") as HTMLButtonEl
 const clearChatButton = document.getElementById("clearChat") as HTMLButtonElement;
 const authStatusEl = document.getElementById("authStatus") as HTMLParagraphElement;
 const authorizeGoogleButton = document.getElementById("authorizeGoogle") as HTMLButtonElement;
+const closeDockButton = document.getElementById("closeDock") as HTMLButtonElement;
 const oauthInfoEl = document.getElementById("oauthInfo") as HTMLPreElement;
 const toggleWorkflowsButton = document.getElementById("toggleWorkflows") as HTMLButtonElement;
 const workflowPanelEl = document.getElementById("workflowPanel") as HTMLDivElement;
@@ -115,11 +127,14 @@ const manualApiPurposeEl = document.getElementById("manualApiPurpose") as HTMLIn
 const manualApiCurlEl = document.getElementById("manualApiCurl") as HTMLTextAreaElement;
 const parseCurlButton = document.getElementById("parseCurl") as HTMLButtonElement;
 const manualApiMethodEl = document.getElementById("manualApiMethod") as HTMLSelectElement;
+const manualApiParamsRowsEl = document.getElementById("manualApiParamsRows") as HTMLDivElement;
+const addParamRowButton = document.getElementById("addParamRow") as HTMLButtonElement;
 const manualApiHeadersRowsEl = document.getElementById("manualApiHeadersRows") as HTMLDivElement;
 const addHeaderRowButton = document.getElementById("addHeaderRow") as HTMLButtonElement;
 const manualApiBodyEl = document.getElementById("manualApiBody") as HTMLTextAreaElement;
 const addManualApiButton = document.getElementById("addManualApi") as HTMLButtonElement;
 const manualApiActionsEl = document.getElementById("manualApiActions") as HTMLDivElement;
+const clearManualApiButton = document.getElementById("clearManualApi") as HTMLButtonElement;
 const apiDetailNameEl = document.getElementById("apiDetailName") as HTMLDivElement;
 const apiDetailPurposeEl = document.getElementById("apiDetailPurpose") as HTMLDivElement;
 const apiDetailParamsEl = document.getElementById("apiDetailParams") as HTMLDivElement;
@@ -143,6 +158,7 @@ const toggleExecutionResultButton = document.getElementById("toggleExecutionResu
 const executionResultPanelEl = document.getElementById("executionResultPanel") as HTMLDivElement;
 const executionResultListEl = document.getElementById("executionResultList") as HTMLDivElement;
 const clearExecutionResultButton = document.getElementById("clearExecutionResult") as HTMLButtonElement;
+const panelBodyEl = document.querySelector(".panel-body") as HTMLDivElement | null;
 const MAX_EXEC_RESULTS = 10;
 let execResults: ExecResult[] = [];
 
@@ -194,18 +210,35 @@ function getCurrentAuthState(): AuthState | null {
   };
 }
 
+function isAuthExpired(): boolean {
+  if (!isAuthorized || !firebaseIdToken) return true;
+  if (authExpiresAt > 0 && Date.now() >= authExpiresAt) return true;
+  return false;
+}
+
+function canUseAuthenticatedFeatures(): boolean {
+  return Boolean(
+    isAuthorized &&
+    firebaseIdToken &&
+    authExpiresAt > 0 &&
+    Date.now() < authExpiresAt &&
+    isAllowedAiiiEmail(accountEmail),
+  );
+}
+
+/** 未通過授權時鎖定 panel-body 內互動（收合鈕除外），與 setChatEnabled 併用 */
+function syncPanelBodyAuthLock(): void {
+  if (!panelBodyEl) return;
+  panelBodyEl.classList.toggle("panel-body--auth-locked", !canUseAuthenticatedFeatures());
+}
+
 function clearAuthStateInMemory(): void {
   isAuthorized = false;
   firebaseIdToken = "";
   googleAccessToken = "";
   authExpiresAt = 0;
   accountEmail = "";
-}
-
-function isAuthExpired(): boolean {
-  if (!isAuthorized || !firebaseIdToken) return true;
-  if (authExpiresAt > 0 && Date.now() >= authExpiresAt) return true;
-  return false;
+  syncPanelBodyAuthLock();
 }
 
 function notifyAuthExpired(): void {
@@ -334,6 +367,7 @@ function setChatEnabled(enabled: boolean): void {
   chatInputEl.placeholder = enabled
     ? "例如：業務離職了，我要移除他的 sales 與 lineUser 身份"
     : "請先完成 Google 授權後，才可使用對話窗";
+  syncPanelBodyAuthLock();
 }
 
 // ===== 自訂 API 表單輔助（欄位正規化 / Header 管理） =====
@@ -482,6 +516,82 @@ function collectManualHeaders(): Record<string, string> {
     if (key && val) out[key] = val;
   });
   return out;
+}
+
+function appendManualParamRow(key = "", value = ""): void {
+  const row = document.createElement("div");
+  row.className = "header-row";
+  const keyInput = document.createElement("input");
+  keyInput.type = "text";
+  keyInput.className = "header-value";
+  keyInput.placeholder = "Param key";
+  keyInput.value = key;
+  const valInput = document.createElement("input");
+  valInput.type = "text";
+  valInput.className = "header-value";
+  valInput.placeholder = "Value（可空）";
+  valInput.value = value;
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.className = "header-remove";
+  removeBtn.textContent = "移除";
+  removeBtn.addEventListener("click", () => {
+    row.remove();
+    if (!manualApiParamsRowsEl.querySelector(".header-row")) appendManualParamRow();
+  });
+  row.appendChild(keyInput);
+  row.appendChild(valInput);
+  row.appendChild(removeBtn);
+  manualApiParamsRowsEl.appendChild(row);
+}
+
+function renderManualParamsRows(params: Array<{ key: string; value: string }>): void {
+  manualApiParamsRowsEl.replaceChildren();
+  const clean = params.filter((p) => p.key.trim());
+  if (!clean.length) {
+    appendManualParamRow();
+    return;
+  }
+  clean.forEach((p) => appendManualParamRow(p.key, p.value));
+}
+
+function collectManualParams(): string[] {
+  const keys: string[] = [];
+  manualApiParamsRowsEl.querySelectorAll(".header-row").forEach((node) => {
+    const row = node as HTMLDivElement;
+    const inputs = row.querySelectorAll("input");
+    const key = (inputs[0] as HTMLInputElement | undefined)?.value.trim() ?? "";
+    if (key) keys.push(key);
+  });
+  return Array.from(new Set(keys));
+}
+
+function inferParamEntries(path: string, body: string): Array<{ key: string; value: string }> {
+  const map = new Map<string, string>();
+  try {
+    const qIdx = path.indexOf("?");
+    if (qIdx >= 0) {
+      new URLSearchParams(path.slice(qIdx + 1)).forEach((v, k) => {
+        map.set(k, v);
+      });
+    }
+  } catch {
+    // ignore invalid query string
+  }
+  if (body.trim().startsWith("{")) {
+    try {
+      const parsed = JSON.parse(body) as Record<string, unknown>;
+      Object.entries(parsed).forEach(([k, v]) => {
+        if (map.has(k)) return;
+        if (typeof v === "string") map.set(k, v);
+        else if (typeof v === "number" || typeof v === "boolean") map.set(k, String(v));
+        else map.set(k, "");
+      });
+    } catch {
+      // ignore invalid json
+    }
+  }
+  return Array.from(map.entries()).map(([key, value]) => ({ key, value }));
 }
 
 // ===== curl / 對話內容解析為 API 候選 =====
@@ -1146,7 +1256,7 @@ function renderApiCandidates(): void {
     empty.className = "workflow-subtitle";
     empty.textContent = "尚未偵測到 API，可手動新增。";
     apiCandidatesEl.appendChild(empty);
-    renderApiDetail(null);
+    renderApiDetail(pinnedDetailSpec || null);
     return;
   }
   if (selectedApiIndex >= allCandidates.length) {
@@ -1696,7 +1806,7 @@ function renderMessages(): void {
   if (!messages.length) {
     const empty = document.createElement("div");
     empty.className = "empty-tip";
-    empty.textContent = "先輸入需求，例如：業務離職後要停用 sales 與 lineUser 身份。";
+    empty.textContent = "";
     chatMessagesEl.appendChild(empty);
     return;
   }
@@ -1852,15 +1962,27 @@ async function loadMessages(): Promise<void> {
     try {
       const parsed = JSON.parse(saved[AUTH_STATE_KEY] as string) as AuthState;
       if (isAuthStateValid(parsed)) {
-        firebaseIdToken = parsed.firebaseIdToken;
-        googleAccessToken = parsed.googleAccessToken;
-        authExpiresAt = parsed.expiresAt;
-        accountEmail = parsed.accountEmail || "(無法取得 email)";
-        isAuthorized = true;
-        setChatEnabled(true);
-        setAuthStatus(`已授權（${accountEmail}）`, "ok");
-        setOAuthInfo(`account_email: ${accountEmail}`);
-        return;
+        const storedEmail = parsed.accountEmail || "";
+        if (!isAllowedAiiiEmail(storedEmail)) {
+          clearAuthStateInMemory();
+          await saveMessages();
+          setAuthStatus(
+            "此擴充僅限  公司 Google 帳號。已清除不符合網域的授權資料，請改用公司帳號授權。",
+            "error",
+          );
+          setOAuthInfo(storedEmail ? `先前帳號：${storedEmail}` : "先前授權無有效信箱");
+          setToast("僅限  帳號可使用本擴充。", "error", 8000);
+        } else {
+          firebaseIdToken = parsed.firebaseIdToken;
+          googleAccessToken = parsed.googleAccessToken;
+          authExpiresAt = parsed.expiresAt;
+          accountEmail = storedEmail || "(無法取得 email)";
+          isAuthorized = true;
+          setChatEnabled(true);
+          setAuthStatus(`已授權（${accountEmail}）`, "ok");
+          setOAuthInfo(`account_email: ${accountEmail}`);
+          return;
+        }
       }
     } catch {
       // ignore parse errors and fallback to interactive auth
@@ -1868,10 +1990,13 @@ async function loadMessages(): Promise<void> {
   }
 
   const identityInfo = await checkIdentityAuthorization();
-  console.log("identityInfo", identityInfo);
   if (identityInfo.authorized) {
     setAuthStatus(`${identityInfo.message}，但 Token 已過期，請重新授權。`, "normal");
+  } else if (identityInfo.domainNotAllowed) {
+    setAuthStatus(identityInfo.message, "error");
+    setOAuthInfo(identityInfo.message);
   }
+  syncPanelBodyAuthLock();
 }
 
 async function saveMessages(): Promise<void> {
@@ -1911,7 +2036,11 @@ function appendToMessage(index: number, chunk: string): void {
   refreshApiCandidatesFromLatestAssistant();
 }
 
-function checkIdentityAuthorization(): Promise<{ authorized: boolean; message: string }> {
+function checkIdentityAuthorization(): Promise<{
+  authorized: boolean;
+  message: string;
+  domainNotAllowed?: boolean;
+}> {
   return new Promise((resolve) => {
     if (!extensionChrome?.identity?.getProfileUserInfo) {
       resolve({ authorized: false, message: "目前環境不支援 chrome.identity" });
@@ -1925,6 +2054,14 @@ function checkIdentityAuthorization(): Promise<{ authorized: boolean; message: s
       }
       if (!userInfo?.email) {
         resolve({ authorized: false, message: "尚未完成 OAuth 授權，請按「Google 授權」" });
+        return;
+      }
+      if (!isAllowedAiiiEmail(userInfo.email)) {
+        resolve({
+          authorized: false,
+          domainNotAllowed: true,
+          message: `瀏覽器 Google 帳號為 ${userInfo.email}，僅限 ${ALLOWED_GOOGLE_EMAIL_SUFFIX} 可使用本擴充。`,
+        });
         return;
       }
       resolve({ authorized: true, message: `已偵測瀏覽器帳號 ${userInfo.email}` });
@@ -2011,15 +2148,29 @@ async function authorizeNow(): Promise<void> {
   setAuthStatus("正在進行 Google OAuth 授權...", "normal");
   try {
     const grant = await requestOAuthAuthorization();
-    googleAccessToken = grant.accessToken;
-    firebaseIdToken = await exchangeGoogleTokenForFirebaseIdToken(grant.accessToken);
-    accountEmail = "(無法取得 email)";
+    let resolvedEmail = "(無法取得 email)";
     try {
       const userInfo = await fetchGoogleUserInfo(grant.accessToken);
-      if (userInfo.email) accountEmail = userInfo.email;
+      if (userInfo.email) resolvedEmail = userInfo.email;
     } catch (error) {
       console.log("[personal-extension] userinfoError", error);
     }
+    if (!isAllowedAiiiEmail(resolvedEmail)) {
+      clearAuthStateInMemory();
+      setChatEnabled(false);
+      await saveMessages();
+      const detail =
+        resolvedEmail !== "(無法取得 email)"
+          ? `目前 Google 帳號為 ${resolvedEmail}，僅限 ${ALLOWED_GOOGLE_EMAIL_SUFFIX} 可使用本擴充。`
+          : `無法取得授權信箱，或信箱非 ${ALLOWED_GOOGLE_EMAIL_SUFFIX}。請確認已使用公司帳號登入 Google。`;
+      setAuthStatus(detail, "error");
+      setOAuthInfo(detail);
+      setToast(`僅限 ${ALLOWED_GOOGLE_EMAIL_SUFFIX} 帳號`, "error", 8000);
+      return;
+    }
+    googleAccessToken = grant.accessToken;
+    accountEmail = resolvedEmail;
+    firebaseIdToken = await exchangeGoogleTokenForFirebaseIdToken(grant.accessToken);
     const expiresInSeconds = Number.parseInt(grant.expiresIn || "", 10);
     const safeTtlMs = Number.isFinite(expiresInSeconds) && expiresInSeconds > 0 ? expiresInSeconds * 1000 : 3600 * 1000;
     // 提前 60 秒視為到期，避免邊界時間觸發 401。
@@ -2037,6 +2188,7 @@ async function authorizeNow(): Promise<void> {
     });
   } catch (error) {
     clearAuthStateInMemory();
+    setChatEnabled(false);
     await saveMessages();
     const message = error instanceof Error ? error.message : "未知錯誤";
     setAuthStatus(`OAuth 授權失敗：${message}`, "error");
@@ -2539,6 +2691,7 @@ function clearManualForm(): void {
   manualApiPathEl.value = "";
   manualApiPurposeEl.value = "";
   manualApiMethodEl.value = "GET";
+  renderManualParamsRows([]);
   renderManualHeaderRowsFromObject({});
   manualApiBodyEl.value = "";
   manualApiCurlEl.value = "";
@@ -2558,7 +2711,8 @@ function buildSpecFromForm(): { name: string; path: string; spec: ApiSpec } {
   const bodyTemplate = manualApiBodyEl.value.trim();
   const bearerRaw = headers.Authorization ?? headers.authorization ?? "";
   const bearerToken = bearerRaw.replace(/^Bearer\s+/i, "").trim();
-  const params = inferParamsFromPathAndBody(path, bodyTemplate);
+  const manualParams = collectManualParams();
+  const params = manualParams.length ? manualParams : inferParamsFromPathAndBody(path, bodyTemplate);
   const spec: ApiSpec = {
     api: path,
     path,
@@ -2660,6 +2814,7 @@ parseCurlButton.addEventListener("click", () => {
   }
   manualApiMethodEl.value = parsed.method;
   manualApiPathEl.value = parsed.url;
+  renderManualParamsRows(inferParamEntries(parsed.url, parsed.body));
   renderManualHeaderRowsFromObject(parsed.headers);
   manualApiBodyEl.value = parsed.body;
   if (!manualApiNameEl.value.trim()) {
@@ -2875,12 +3030,24 @@ authorizeGoogleButton.addEventListener("click", () => {
   void authorizeNow();
 });
 
+closeDockButton.addEventListener("click", () => {
+  chrome?.runtime?.sendMessage({ type: "CLOSE_HELLO_DOCK" });
+});
+
 setWorkflowPanelOpen(true);
 renderManualHeaderRowsFromObject({});
+renderManualParamsRows([]);
 void loadMessages();
 
 addHeaderRowButton.addEventListener("click", () => {
   appendManualHeaderRow();
+});
+addParamRowButton.addEventListener("click", () => {
+  appendManualParamRow();
+});
+clearManualApiButton.addEventListener("click", () => {
+  clearManualForm();
+  setToast("已清除自訂 API 內容。", "normal");
 });
 
 // ── Chat messages resize handle ──

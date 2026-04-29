@@ -10,13 +10,14 @@ const DOCK_RESIZE_ID = "personal-extension-resize-handle";
 const DOCK_WIDTH_KEY = "personalExtDockWidth";
 const DOCK_MIN_WIDTH = 280;
 const DOCK_MAX_WIDTH = 860;
-const DOCK_DEFAULT_WIDTH = 620;
+/** 首次開啟或無 session 紀錄時的預設寬度（窄版） */
+const DOCK_DEFAULT_WIDTH = 360;
 
 function getSavedWidth(): number {
   const raw = sessionStorage.getItem(DOCK_WIDTH_KEY);
   const n = Number(raw);
   if (Number.isFinite(n) && n >= DOCK_MIN_WIDTH && n <= DOCK_MAX_WIDTH) {
-    return Math.max(n, DOCK_DEFAULT_WIDTH);
+    return n;
   }
   return DOCK_DEFAULT_WIDTH;
 }
@@ -24,10 +25,13 @@ const INLINE_STYLE_KEYS = {
   htmlPaddingRight: "data-personalExtHtmlPaddingRight",
   htmlWidth: "data-personalExtHtmlWidth",
   htmlBoxSizing: "data-personalExtHtmlBoxSizing",
+  htmlOverflowX: "data-personalExtHtmlOverflowX",
   bodyPaddingRight: "data-personalExtBodyPaddingRight",
   bodyWidth: "data-personalExtBodyWidth",
   bodyBoxSizing: "data-personalExtBodyBoxSizing",
 } as const;
+
+const DOCK_OPEN_CLASS = "personal-extension-dock-open";
 
 const extensionChrome = (
   globalThis as {
@@ -61,10 +65,13 @@ function applyCompactionStyles(width: number): void {
   rememberInlineStyle(INLINE_STYLE_KEYS.htmlPaddingRight, html.style.paddingRight);
   rememberInlineStyle(INLINE_STYLE_KEYS.htmlWidth, html.style.width);
   rememberInlineStyle(INLINE_STYLE_KEYS.htmlBoxSizing, html.style.boxSizing);
+  rememberInlineStyle(INLINE_STYLE_KEYS.htmlOverflowX, html.style.overflowX);
 
+  html.classList.add(DOCK_OPEN_CLASS);
   html.style.paddingRight = `${width}px`;
   html.style.boxSizing = "border-box";
   html.style.width = "100%";
+  html.style.overflowX = "hidden";
 
   if (!body) return;
   rememberInlineStyle(INLINE_STYLE_KEYS.bodyPaddingRight, body.style.paddingRight);
@@ -72,19 +79,23 @@ function applyCompactionStyles(width: number): void {
   rememberInlineStyle(INLINE_STYLE_KEYS.bodyBoxSizing, body.style.boxSizing);
 
   body.style.boxSizing = "border-box";
+  body.style.width = "100%";
 }
 
 function updateCompactionWidth(width: number): void {
   document.documentElement.style.paddingRight = `${width}px`;
+  if (document.body) document.body.style.paddingRight = `${width}px`;
 }
 
 function restoreCompactionStyles(): void {
   const html = document.documentElement;
   const body = document.body;
 
+  html.classList.remove(DOCK_OPEN_CLASS);
   html.style.paddingRight = readRememberedInlineStyle(INLINE_STYLE_KEYS.htmlPaddingRight);
   html.style.width = readRememberedInlineStyle(INLINE_STYLE_KEYS.htmlWidth);
   html.style.boxSizing = readRememberedInlineStyle(INLINE_STYLE_KEYS.htmlBoxSizing);
+  html.style.overflowX = readRememberedInlineStyle(INLINE_STYLE_KEYS.htmlOverflowX);
 
   if (!body) return;
   body.style.paddingRight = readRememberedInlineStyle(INLINE_STYLE_KEYS.bodyPaddingRight);
@@ -158,49 +169,9 @@ function createDock(): void {
     iframe.style.pointerEvents = "";
   });
 
-  // ── Header ──
-  const header = document.createElement("div");
-  Object.assign(header.style, {
-    flexShrink: "0",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: "8px",
-    padding: "10px 12px 10px 16px",
-    borderBottom: "1px solid #e0e0e0",
-    background: "#fafafa",
-    fontSize: "14px",
-    fontWeight: "600",
-    color: "#202124",
-  });
-
-  const title = document.createElement("span");
-  title.textContent = "Internal API Helper";
-
-  const closeBtn = document.createElement("button");
-  closeBtn.type = "button";
-  closeBtn.setAttribute("aria-label", "關閉面板");
-  closeBtn.textContent = "×";
-  Object.assign(closeBtn.style, {
-    border: "0",
-    background: "transparent",
-    fontSize: "22px",
-    lineHeight: "1",
-    cursor: "pointer",
-    color: "#5f6368",
-    padding: "4px 8px",
-    borderRadius: "6px",
-  });
-  closeBtn.addEventListener("mouseenter", () => { closeBtn.style.background = "#e8eaed"; });
-  closeBtn.addEventListener("mouseleave", () => { closeBtn.style.background = "transparent"; });
-  closeBtn.addEventListener("click", () => { removeDock(); });
-
-  header.appendChild(title);
-  header.appendChild(closeBtn);
-
-  // ── iframe ──
+  // ── iframe（標題與關閉鈕在 panel.html 內） ──
   const iframe = document.createElement("iframe");
-  iframe.title = "Internal API Helper";
+  iframe.title = "Personal Workflow Assistant";
   iframe.src = extensionChrome.runtime.getURL("panel.html");
   Object.assign(iframe.style, {
     flex: "1",
@@ -210,7 +181,6 @@ function createDock(): void {
   });
 
   shell.appendChild(resizeHandle);
-  shell.appendChild(header);
   shell.appendChild(iframe);
   document.documentElement.appendChild(shell);
 
@@ -235,6 +205,11 @@ function toggleDock(): void {
 }
 
 extensionChrome?.runtime?.onMessage?.addListener((message: ContentMessage) => {
+  if (message?.type === "CLOSE_HELLO_DOCK") {
+    if (isDockOpen()) removeDock();
+    return;
+  }
+
   if (message?.type === "TOGGLE_HELLO_DOCK") {
     toggleDock();
     return;

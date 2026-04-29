@@ -33,3 +33,12 @@ async function openDockOnTab(tab) {
 chrome.action.onClicked.addListener(async (tab) => {
   await openDockOnTab(tab);
 });
+
+chrome.runtime.onMessage.addListener((message) => {
+  if (message?.type !== "CLOSE_HELLO_DOCK") return;
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const id = tabs[0]?.id;
+    if (!id) return;
+    chrome.tabs.sendMessage(id, { type: "CLOSE_HELLO_DOCK" }).catch(() => {});
+  });
+});

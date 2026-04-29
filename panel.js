@@ -9,6 +9,12 @@
   const MAX_MESSAGES = 40;
   const GOOGLE_OAUTH_CLIENT_ID = "";
   const GOOGLE_OAUTH_SCOPE = "openid email profile";
+  const ALLOWED_GOOGLE_EMAIL_SUFFIX = "";
+  function isAllowedAiiiEmail(email) {
+    const normalized = email.trim().toLowerCase();
+    if (!normalized.includes("@")) return false;
+    return normalized.endsWith(ALLOWED_GOOGLE_EMAIL_SUFFIX);
+  }
   const FIREBASE_WEB_API_KEY = "";
   const AGENT_CHAT_API = "";
   const toastStatusEl = document.getElementById("toastStatus");
@@ -21,6 +27,7 @@
   const clearChatButton = document.getElementById("clearChat");
   const authStatusEl = document.getElementById("authStatus");
   const authorizeGoogleButton = document.getElementById("authorizeGoogle");
+  const closeDockButton = document.getElementById("closeDock");
   const oauthInfoEl = document.getElementById("oauthInfo");
   const toggleWorkflowsButton = document.getElementById("toggleWorkflows");
   const workflowPanelEl = document.getElementById("workflowPanel");
@@ -35,11 +42,14 @@
   const manualApiCurlEl = document.getElementById("manualApiCurl");
   const parseCurlButton = document.getElementById("parseCurl");
   const manualApiMethodEl = document.getElementById("manualApiMethod");
+  const manualApiParamsRowsEl = document.getElementById("manualApiParamsRows");
+  const addParamRowButton = document.getElementById("addParamRow");
   const manualApiHeadersRowsEl = document.getElementById("manualApiHeadersRows");
   const addHeaderRowButton = document.getElementById("addHeaderRow");
   const manualApiBodyEl = document.getElementById("manualApiBody");
   const addManualApiButton = document.getElementById("addManualApi");
   const manualApiActionsEl = document.getElementById("manualApiActions");
+  const clearManualApiButton = document.getElementById("clearManualApi");
   const apiDetailNameEl = document.getElementById("apiDetailName");
   const apiDetailPurposeEl = document.getElementById("apiDetailPurpose");
   const apiDetailParamsEl = document.getElementById("apiDetailParams");
@@ -63,6 +73,7 @@
   const executionResultPanelEl = document.getElementById("executionResultPanel");
   const executionResultListEl = document.getElementById("executionResultList");
   const clearExecutionResultButton = document.getElementById("clearExecutionResult");
+  const panelBodyEl = document.querySelector(".panel-body");
   const MAX_EXEC_RESULTS = 10;
   let execResults = [];
   let messages = [];
@@ -105,17 +116,27 @@
       accountEmail
     };
   }
+  function isAuthExpired() {
+    if (!isAuthorized || !firebaseIdToken) return true;
+    if (authExpiresAt > 0 && Date.now() >= authExpiresAt) return true;
+    return false;
+  }
+  function canUseAuthenticatedFeatures() {
+    return Boolean(
+      isAuthorized && firebaseIdToken && authExpiresAt > 0 && Date.now() < authExpiresAt && isAllowedAiiiEmail(accountEmail)
+    );
+  }
+  function syncPanelBodyAuthLock() {
+    if (!panelBodyEl) return;
+    panelBodyEl.classList.toggle("panel-body--auth-locked", !canUseAuthenticatedFeatures());
+  }
   function clearAuthStateInMemory() {
     isAuthorized = false;
     firebaseIdToken = "";
     googleAccessToken = "";
     authExpiresAt = 0;
     accountEmail = "";
-  }
-  function isAuthExpired() {
-    if (!isAuthorized || !firebaseIdToken) return true;
-    if (authExpiresAt > 0 && Date.now() >= authExpiresAt) return true;
-    return false;
+    syncPanelBodyAuthLock();
   }
   function notifyAuthExpired() {
     clearAuthStateInMemory();
@@ -228,6 +249,7 @@
     chatInputEl.disabled = !enabled;
     sendMessageButton.disabled = !enabled;
     chatInputEl.placeholder = enabled ? "\u4F8B\u5982\uFF1A\u696D\u52D9\u96E2\u8077\u4E86\uFF0C\u6211\u8981\u79FB\u9664\u4ED6\u7684 sales \u8207 lineUser \u8EAB\u4EFD" : "\u8ACB\u5148\u5B8C\u6210 Google \u6388\u6B0A\u5F8C\uFF0C\u624D\u53EF\u4F7F\u7528\u5C0D\u8A71\u7A97";
+    syncPanelBodyAuthLock();
   }
   function buildMessageWithSkillDirective(rawMessage, useSkill) {
     if (!useSkill) return rawMessage;
@@ -352,6 +374,76 @@
       if (key && val) out[key] = val;
     });
     return out;
+  }
+  function appendManualParamRow(key = "", value = "") {
+    const row = document.createElement("div");
+    row.className = "header-row";
+    const keyInput = document.createElement("input");
+    keyInput.type = "text";
+    keyInput.className = "header-value";
+    keyInput.placeholder = "Param key";
+    keyInput.value = key;
+    const valInput = document.createElement("input");
+    valInput.type = "text";
+    valInput.className = "header-value";
+    valInput.placeholder = "Value\uFF08\u53EF\u7A7A\uFF09";
+    valInput.value = value;
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "header-remove";
+    removeBtn.textContent = "\u79FB\u9664";
+    removeBtn.addEventListener("click", () => {
+      row.remove();
+      if (!manualApiParamsRowsEl.querySelector(".header-row")) appendManualParamRow();
+    });
+    row.appendChild(keyInput);
+    row.appendChild(valInput);
+    row.appendChild(removeBtn);
+    manualApiParamsRowsEl.appendChild(row);
+  }
+  function renderManualParamsRows(params) {
+    manualApiParamsRowsEl.replaceChildren();
+    const clean = params.filter((p) => p.key.trim());
+    if (!clean.length) {
+      appendManualParamRow();
+      return;
+    }
+    clean.forEach((p) => appendManualParamRow(p.key, p.value));
+  }
+  function collectManualParams() {
+    const keys = [];
+    manualApiParamsRowsEl.querySelectorAll(".header-row").forEach((node) => {
+      const row = node;
+      const inputs = row.querySelectorAll("input");
+      const key = inputs[0]?.value.trim() ?? "";
+      if (key) keys.push(key);
+    });
+    return Array.from(new Set(keys));
+  }
+  function inferParamEntries(path, body) {
+    const map = /* @__PURE__ */ new Map();
+    try {
+      const qIdx = path.indexOf("?");
+      if (qIdx >= 0) {
+        new URLSearchParams(path.slice(qIdx + 1)).forEach((v, k) => {
+          map.set(k, v);
+        });
+      }
+    } catch {
+    }
+    if (body.trim().startsWith("{")) {
+      try {
+        const parsed = JSON.parse(body);
+        Object.entries(parsed).forEach(([k, v]) => {
+          if (map.has(k)) return;
+          if (typeof v === "string") map.set(k, v);
+          else if (typeof v === "number" || typeof v === "boolean") map.set(k, String(v));
+          else map.set(k, "");
+        });
+      } catch {
+      }
+    }
+    return Array.from(map.entries()).map(([key, value]) => ({ key, value }));
   }
   function extractCurlUrl(text) {
     const normalized = text.replace(/\\\r?\n/g, " ").replace(/\r/g, " ").trim();
@@ -908,7 +1000,7 @@
       empty.className = "workflow-subtitle";
       empty.textContent = "\u5C1A\u672A\u5075\u6E2C\u5230 API\uFF0C\u53EF\u624B\u52D5\u65B0\u589E\u3002";
       apiCandidatesEl.appendChild(empty);
-      renderApiDetail(null);
+      renderApiDetail(pinnedDetailSpec || null);
       return;
     }
     if (selectedApiIndex >= allCandidates.length) {
@@ -1399,7 +1491,7 @@
     if (!messages.length) {
       const empty = document.createElement("div");
       empty.className = "empty-tip";
-      empty.textContent = "\u5148\u8F38\u5165\u9700\u6C42\uFF0C\u4F8B\u5982\uFF1A\u696D\u52D9\u96E2\u8077\u5F8C\u8981\u505C\u7528 sales \u8207 lineUser \u8EAB\u4EFD\u3002";
+      empty.textContent = "";
       chatMessagesEl.appendChild(empty);
       return;
     }
@@ -1523,24 +1615,39 @@
       try {
         const parsed = JSON.parse(saved[AUTH_STATE_KEY]);
         if (isAuthStateValid(parsed)) {
-          firebaseIdToken = parsed.firebaseIdToken;
-          googleAccessToken = parsed.googleAccessToken;
-          authExpiresAt = parsed.expiresAt;
-          accountEmail = parsed.accountEmail || "(\u7121\u6CD5\u53D6\u5F97 email)";
-          isAuthorized = true;
-          setChatEnabled(true);
-          setAuthStatus(`\u5DF2\u6388\u6B0A\uFF08${accountEmail}\uFF09`, "ok");
-          setOAuthInfo(`account_email: ${accountEmail}`);
-          return;
+          const storedEmail = parsed.accountEmail || "";
+          if (!isAllowedAiiiEmail(storedEmail)) {
+            clearAuthStateInMemory();
+            await saveMessages();
+            setAuthStatus(
+              "\u6B64\u64F4\u5145\u50C5\u9650  \u516C\u53F8 Google \u5E33\u865F\u3002\u5DF2\u6E05\u9664\u4E0D\u7B26\u5408\u7DB2\u57DF\u7684\u6388\u6B0A\u8CC7\u6599\uFF0C\u8ACB\u6539\u7528\u516C\u53F8\u5E33\u865F\u6388\u6B0A\u3002",
+              "error"
+            );
+            setOAuthInfo(storedEmail ? `\u5148\u524D\u5E33\u865F\uFF1A${storedEmail}` : "\u5148\u524D\u6388\u6B0A\u7121\u6709\u6548\u4FE1\u7BB1");
+            setToast("\u50C5\u9650  \u5E33\u865F\u53EF\u4F7F\u7528\u672C\u64F4\u5145\u3002", "error", 8e3);
+          } else {
+            firebaseIdToken = parsed.firebaseIdToken;
+            googleAccessToken = parsed.googleAccessToken;
+            authExpiresAt = parsed.expiresAt;
+            accountEmail = storedEmail || "(\u7121\u6CD5\u53D6\u5F97 email)";
+            isAuthorized = true;
+            setChatEnabled(true);
+            setAuthStatus(`\u5DF2\u6388\u6B0A\uFF08${accountEmail}\uFF09`, "ok");
+            setOAuthInfo(`account_email: ${accountEmail}`);
+            return;
+          }
         }
       } catch {
       }
     }
     const identityInfo = await checkIdentityAuthorization();
-    console.log("identityInfo", identityInfo);
     if (identityInfo.authorized) {
       setAuthStatus(`${identityInfo.message}\uFF0C\u4F46 Token \u5DF2\u904E\u671F\uFF0C\u8ACB\u91CD\u65B0\u6388\u6B0A\u3002`, "normal");
+    } else if (identityInfo.domainNotAllowed) {
+      setAuthStatus(identityInfo.message, "error");
+      setOAuthInfo(identityInfo.message);
     }
+    syncPanelBodyAuthLock();
   }
   async function saveMessages() {
     const data = {
@@ -1590,6 +1697,14 @@
         }
         if (!userInfo?.email) {
           resolve({ authorized: false, message: "\u5C1A\u672A\u5B8C\u6210 OAuth \u6388\u6B0A\uFF0C\u8ACB\u6309\u300CGoogle \u6388\u6B0A\u300D" });
+          return;
+        }
+        if (!isAllowedAiiiEmail(userInfo.email)) {
+          resolve({
+            authorized: false,
+            domainNotAllowed: true,
+            message: `\u700F\u89BD\u5668 Google \u5E33\u865F\u70BA ${userInfo.email}\uFF0C\u50C5\u9650 ${ALLOWED_GOOGLE_EMAIL_SUFFIX} \u53EF\u4F7F\u7528\u672C\u64F4\u5145\u3002`
+          });
           return;
         }
         resolve({ authorized: true, message: `\u5DF2\u5075\u6E2C\u700F\u89BD\u5668\u5E33\u865F ${userInfo.email}` });
@@ -1652,15 +1767,26 @@
     setAuthStatus("\u6B63\u5728\u9032\u884C Google OAuth \u6388\u6B0A...", "normal");
     try {
       const grant = await requestOAuthAuthorization();
-      googleAccessToken = grant.accessToken;
-      firebaseIdToken = await exchangeGoogleTokenForFirebaseIdToken(grant.accessToken);
-      accountEmail = "(\u7121\u6CD5\u53D6\u5F97 email)";
+      let resolvedEmail = "(\u7121\u6CD5\u53D6\u5F97 email)";
       try {
         const userInfo = await fetchGoogleUserInfo(grant.accessToken);
-        if (userInfo.email) accountEmail = userInfo.email;
+        if (userInfo.email) resolvedEmail = userInfo.email;
       } catch (error) {
         console.log("[personal-extension] userinfoError", error);
       }
+      if (!isAllowedAiiiEmail(resolvedEmail)) {
+        clearAuthStateInMemory();
+        setChatEnabled(false);
+        await saveMessages();
+        const detail = resolvedEmail !== "(\u7121\u6CD5\u53D6\u5F97 email)" ? `\u76EE\u524D Google \u5E33\u865F\u70BA ${resolvedEmail}\uFF0C\u50C5\u9650 ${ALLOWED_GOOGLE_EMAIL_SUFFIX} \u53EF\u4F7F\u7528\u672C\u64F4\u5145\u3002` : `\u7121\u6CD5\u53D6\u5F97\u6388\u6B0A\u4FE1\u7BB1\uFF0C\u6216\u4FE1\u7BB1\u975E ${ALLOWED_GOOGLE_EMAIL_SUFFIX}\u3002\u8ACB\u78BA\u8A8D\u5DF2\u4F7F\u7528\u516C\u53F8\u5E33\u865F\u767B\u5165 Google\u3002`;
+        setAuthStatus(detail, "error");
+        setOAuthInfo(detail);
+        setToast(`\u50C5\u9650 ${ALLOWED_GOOGLE_EMAIL_SUFFIX} \u5E33\u865F`, "error", 8e3);
+        return;
+      }
+      googleAccessToken = grant.accessToken;
+      accountEmail = resolvedEmail;
+      firebaseIdToken = await exchangeGoogleTokenForFirebaseIdToken(grant.accessToken);
       const expiresInSeconds = Number.parseInt(grant.expiresIn || "", 10);
       const safeTtlMs = Number.isFinite(expiresInSeconds) && expiresInSeconds > 0 ? expiresInSeconds * 1e3 : 3600 * 1e3;
       authExpiresAt = Date.now() + safeTtlMs - 6e4;
@@ -1677,6 +1803,7 @@
       });
     } catch (error) {
       clearAuthStateInMemory();
+      setChatEnabled(false);
       await saveMessages();
       const message = error instanceof Error ? error.message : "\u672A\u77E5\u932F\u8AA4";
       setAuthStatus(`OAuth \u6388\u6B0A\u5931\u6557\uFF1A${message}`, "error");
@@ -2142,6 +2269,7 @@
     manualApiPathEl.value = "";
     manualApiPurposeEl.value = "";
     manualApiMethodEl.value = "GET";
+    renderManualParamsRows([]);
     renderManualHeaderRowsFromObject({});
     manualApiBodyEl.value = "";
     manualApiCurlEl.value = "";
@@ -2160,7 +2288,8 @@
     const bodyTemplate = manualApiBodyEl.value.trim();
     const bearerRaw = headers.Authorization ?? headers.authorization ?? "";
     const bearerToken = bearerRaw.replace(/^Bearer\s+/i, "").trim();
-    const params = inferParamsFromPathAndBody(path, bodyTemplate);
+    const manualParams = collectManualParams();
+    const params = manualParams.length ? manualParams : inferParamsFromPathAndBody(path, bodyTemplate);
     const spec = {
       api: path,
       path,
@@ -2257,6 +2386,7 @@
     }
     manualApiMethodEl.value = parsed.method;
     manualApiPathEl.value = parsed.url;
+    renderManualParamsRows(inferParamEntries(parsed.url, parsed.body));
     renderManualHeaderRowsFromObject(parsed.headers);
     manualApiBodyEl.value = parsed.body;
     if (!manualApiNameEl.value.trim()) {
@@ -2438,11 +2568,22 @@
     authorizeGoogleButton.classList.remove("auth-expired-pulse");
     void authorizeNow();
   });
+  closeDockButton.addEventListener("click", () => {
+    chrome?.runtime?.sendMessage({ type: "CLOSE_HELLO_DOCK" });
+  });
   setWorkflowPanelOpen(true);
   renderManualHeaderRowsFromObject({});
+  renderManualParamsRows([]);
   void loadMessages();
   addHeaderRowButton.addEventListener("click", () => {
     appendManualHeaderRow();
+  });
+  addParamRowButton.addEventListener("click", () => {
+    appendManualParamRow();
+  });
+  clearManualApiButton.addEventListener("click", () => {
+    clearManualForm();
+    setToast("\u5DF2\u6E05\u9664\u81EA\u8A02 API \u5167\u5BB9\u3002", "normal");
   });
   const CHAT_HEIGHT_KEY = "chat_messages_height";
   (function initChatResizeHandle() {
