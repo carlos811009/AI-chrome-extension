@@ -1,7 +1,6 @@
-import { compile } from "sass";
-import { writeFile } from "node:fs/promises";
+import { writePanelCss } from "./compile-panel-scss.mjs";
 
-const result = compile("src/panel.scss", { style: "expanded" });
-await writeFile("panel.css", result.css);
+const isProd = process.env.PROD === "1";
 
-console.log("Build done: panel.css");
+await writePanelCss(isProd ? "compressed" : "expanded");
+console.log(`Build done: panel.css (${isProd ? "compressed" : "expanded"})`);

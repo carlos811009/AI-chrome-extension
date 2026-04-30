@@ -1,12 +1,17 @@
 export {};
 
-type ContentMessage = {
-  type?: string;
-  payload?: string;
-};
+import {
+  type DockRuntimeMessage,
+  CLOSE_HELLO_DOCK,
+  OPEN_HELLO_DOCK,
+  SHOW_HELLO_BANNER,
+  TOGGLE_HELLO_DOCK,
+} from "./messages";
 
 const DOCK_SHELL_ID = "personal-extension-dock-shell";
 const DOCK_RESIZE_ID = "personal-extension-resize-handle";
+/** dock 開啟時注入，覆寫部分後台（如 Angular `.MatContainer`）的 min-width，避免主殼寬度鎖死導致與 dock 重疊 */
+const DOCK_HOST_CSS_ID = "personal-extension-dock-host-css";
 const DOCK_WIDTH_KEY = "personalExtDockWidth";
 const DOCK_MIN_WIDTH = 280;
 const DOCK_MAX_WIDTH = 860;
@@ -38,7 +43,7 @@ const extensionChrome = (
     chrome?: {
       runtime: {
         getURL: (path: string) => string;
-        onMessage: { addListener: (cb: (message: ContentMessage) => void) => void };
+        onMessage: { addListener: (cb: (message: DockRuntimeMessage) => void) => void };
       };
     };
   }
@@ -58,6 +63,20 @@ function readRememberedInlineStyle(key: string): string {
   return document.documentElement.getAttribute(key) ?? "";
 }
 
+function applyHostDockLayoutCss(): void {
+  if (document.getElementById(DOCK_HOST_CSS_ID)) return;
+  const style = document.createElement("style");
+  style.id = DOCK_HOST_CSS_ID;
+  style.textContent = `html.personal-extension-dock-open .MatContainer {
+  min-width: 0 !important;
+}`;
+  (document.head ?? document.documentElement).appendChild(style);
+}
+
+function removeHostDockLayoutCss(): void {
+  document.getElementById(DOCK_HOST_CSS_ID)?.remove();
+}
+
 function applyCompactionStyles(width: number): void {
   const html = document.documentElement;
   const body = document.body;
@@ -72,6 +91,8 @@ function applyCompactionStyles(width: number): void {
   html.style.boxSizing = "border-box";
   html.style.width = "100%";
   html.style.overflowX = "hidden";
+
+  applyHostDockLayoutCss();
 
   if (!body) return;
   rememberInlineStyle(INLINE_STYLE_KEYS.bodyPaddingRight, body.style.paddingRight);
@@ -88,6 +109,8 @@ function updateCompactionWidth(width: number): void {
 }
 
 function restoreCompactionStyles(): void {
+  removeHostDockLayoutCss();
+
   const html = document.documentElement;
   const body = document.body;
 
@@ -204,23 +227,23 @@ function toggleDock(): void {
   createDock();
 }
 
-extensionChrome?.runtime?.onMessage?.addListener((message: ContentMessage) => {
-  if (message?.type === "CLOSE_HELLO_DOCK") {
+extensionChrome?.runtime?.onMessage?.addListener((message: DockRuntimeMessage) => {
+  if (message?.type === CLOSE_HELLO_DOCK) {
     if (isDockOpen()) removeDock();
     return;
   }
 
-  if (message?.type === "TOGGLE_HELLO_DOCK") {
+  if (message?.type === TOGGLE_HELLO_DOCK) {
     toggleDock();
     return;
   }
 
-  if (message?.type === "OPEN_HELLO_DOCK") {
+  if (message?.type === OPEN_HELLO_DOCK) {
     openDockIfClosed();
     return;
   }
 
-  if (message?.type !== "SHOW_HELLO_BANNER") return;
+  if (message?.type !== SHOW_HELLO_BANNER) return;
 
   const old = document.getElementById("personal-extension-banner");
   if (old) old.remove();

@@ -21,23 +21,29 @@
 ```
 使用者點 extension icon
    -> background.js: openDockOnTab(tab)
-   -> content.js: 建立 dock + iframe
-   -> panel.html 載入 panel.js/panel.css
-   -> panel.ts 邏輯：對話、API 候選、已儲存 API、流程草稿、執行流程
+   -> tabs.sendMessage(TOGGLE_HELLO_DOCK)；失敗則 executeScript(content.js) 後 OPEN_HELLO_DOCK
+   -> content.js: 建立 dock（resize 柄 + iframe）+ 主頁讓位樣式
+   -> panel.html 載入 panel.js/panel.css（標題列、關閉 × 在 panel 內）
+   -> panel.ts：對話、API 候選、已儲存 API、流程草稿、JSON 匯入／匯出、執行流程
 ```
 
 ### 區塊用途
 
-- **`background.js`**
-  - 單一入口開啟 dock（只處理 `http/https`）。
-  - 先 `tabs.sendMessage`，失敗才補注入 `content.js`。
+- **`background.js`**（**原始碼**：`src/background.ts`，由 `npm run build` 產出）
+  - 單一入口開啟／切換 dock（只處理 `http/https`）。
+  - 先 `tabs.sendMessage(TOGGLE_HELLO_DOCK)`，失敗才補注入 `content.js` 再 `OPEN_HELLO_DOCK`。
+  - 轉發 **`CLOSE_HELLO_DOCK`**：`panel` → `runtime.sendMessage` → 查目前 active tab → `tabs.sendMessage` 至 content。
+
+訊息字串常數集中於 **`src/messages.ts`**，供 background／content／panel 建置時各自 bundle，避免拼字漂移。
 
 - **`content.js`**
-  - 負責「頁面殼」：右側 dock、關閉行為、頁面 banner。
+  - 右側 **dock 殼**：左緣 resize、`iframe` 指向 `panel.html`；**不含** panel 標題／關閉鈕（在 `panel.html`）。
+  - 開啟時對 `html`／`body`：`paddingRight` 等讓位、`overflow-x: hidden`、`personal-extension-dock-open`；並注入一小段 **宿主頁樣式**（僅在 `html.personal-extension-dock-open` 下將 `.MatContainer` 的 `min-width` 覆寫為 `0`，關閉 dock 時移除），用於抵消部分後台鎖死 `min-width: 1440px` 導致與 dock 重疊。dock 寬度 `sessionStorage` 記憶，預設 **360px**（範圍 280–860）。
+  - 監聽 `SHOW_HELLO_BANNER` 在宿主頁顯示浮層 banner（本 repo 內無發送端，預留／外部訊息）。
   - 不放核心業務邏輯。
 
 - **`panel.ts` / `panel.js`**
-  - 主要產品邏輯集中地：授權、聊天、API 解析、流程編排、執行、儲存。
+  - 主要產品邏輯：授權（含 `` 限制）、聊天、API 解析、流程編排、流程 JSON、執行、儲存。
 
 ---
 
@@ -68,11 +74,14 @@
   - `更新已儲存 API`（僅已儲存 API 選入時顯示）
 
 ### 3.6 流程草稿區
-- 目前執行序列（可編輯、刪除、清空）。
-- 刪除步驟與清空草稿都要二次確認。
+- **流程名稱**輸入欄（載入已儲存流程或匯入 JSON 會帶入；儲存時必填；與已儲存流程 trim 後同名須 `confirm`）。
+- 目前執行序列（可編輯、刪除；**刪除單一步驟**需二次確認）。
+- **分享／匯入流程（JSON）**：`personal-extension-workflow` v1；匯出剝除敏感 header；匯入至草稿前有說明對話框（若與既有流程同名或步驟 method+path 序列相同會顯示醒目橫幅）。
+- **清空草稿**：**不**經 `confirm`；一併清空步驟、流程名稱欄、匯入 JSON 的 textarea。
+- 草稿區提供下載／複製草稿 JSON（已儲存流程卡片**無**「匯出 JSON」）。
 
 ### 3.7 已儲存流程區
-- 每筆流程提供 `載入` / `刪除`。
+- 每筆流程僅 **`載入` / `刪除`**（無匯出 JSON）。
 - 刪除流程需二次確認。
 
 ### 3.8 執行結果區
@@ -110,8 +119,11 @@
    - `executeDraftWorkflow`、`showExecutionConfirmDialog`、`renderExecResults`。
    - 呼叫 API 前確認、逐步執行、結果序列化顯示。
 
-8. **事件綁定區**
-   - 所有 button/input 事件入口（含新增/更新/刪除/清空/授權）。
+8. **流程 JSON 與草稿名稱**
+   - 匯出／匯入、敏感欄位過濾、匯入前對話框與同名／同序列警示；`draftNameFromImport` 等與儲存流程連動。
+
+9. **事件綁定區**
+   - 所有 button/input 事件入口（含新增/更新/刪除/清空/授權、關閉 dock 訊息）。
 
 ---
 
@@ -130,10 +142,14 @@
 
 ## 6. 訊息協定
 
+字串常數定義於 **`src/messages.ts`**（`TOGGLE_HELLO_DOCK` 等），下列表格為語意說明。
+
 | 訊息類型 | 方向 | 用途 |
 |---------|------|------|
-| `OPEN_HELLO_DOCK` | background -> content | 開啟右側 dock |
-| `SHOW_HELLO_BANNER` | panel -> content | 在宿主頁顯示 banner |
+| `TOGGLE_HELLO_DOCK` | background → content | 使用者點擊 extension icon：已注入時切換開／關 dock |
+| `OPEN_HELLO_DOCK` | background → content | 剛注入 content 後：若尚未開啟則建立 dock |
+| `CLOSE_HELLO_DOCK` | panel → background → content | 關閉 dock（`runtime.sendMessage` 後由 background 轉發至 active tab） |
+| `SHOW_HELLO_BANNER` | 任意 extension 端點 → content（本 repo 內無固定發送端） | `payload` 文字在宿主頁顯示浮層 banner |
 
 ---
 
@@ -141,18 +157,24 @@
 
 ### 標準指令
 
+建置前會檢查 **Node ≥ 22**（`scripts/check-node.mjs`）；`.nvmrc` 仍建議使用 `22` 以利與團隊一致。
+
 ```bash
-nvm use 22
+cd personal-extension
+nvm use          # 讀取專案 .nvmrc（建議 22）
 npm run build
 ```
 
+其他：`npm run typecheck`、`npm run build:dev`／`build:prod`／`build:watch`／`build:css` 見 `docs/OPTIMIZATION_PROGRESS.md`。
+
 ### 產物
 
-- `panel.js`
+- `panel.js`（由 `src/panel.ts` **bundle** 編譯，內含 `src/panel/*.ts` 子模組）
 - `content.js`
+- `background.js`（由 `src/background.ts` 編譯）
 - `panel.css`
 
-> 原則：優先改 `src/*`，產物由 build 生成，不手改產物。
+> 原則：優先改 `src/*.ts`／`src/panel.scss`／`panel.html`，產物由 **`npm run build`** 生成，不手改產物。**`scripts/*.mjs` 為建置腳本，一般維護不必修改。**
 
 ---
 
@@ -161,6 +183,7 @@ npm run build
 - `host_permissions: ["<all_urls>"]` 仍受 CORS / Cookie 政策限制。
 - `chrome://`、Chrome Web Store 等頁面通常不可注入 content script。
 - Token/API Key 目前在本機 storage；正式產品需進一步安全設計。
+- **Google 授權**：僅 `` 帳號可通過；未授權時 `.panel-body` 使用 `panel-body--auth-locked`（主體互動鎖定；header 的授權與關閉 dock 仍可用）。
 
 ---
 
@@ -169,17 +192,27 @@ npm run build
 ```
 personal-extension/
 ├── manifest.json
-├── background.js
+├── background.js       # 建置產物（源：src/background.ts）
 ├── content.js
 ├── panel.html
 ├── panel.js
 ├── panel.css
 ├── src/
-│   ├── panel.ts
+│   ├── panel.ts          # 面板入口：DOM、狀態、事件、流程／聊天／授權等
+│   ├── panel/
+│   │   ├── types.ts      # 共用型別
+│   │   ├── constants.ts # 儲存 key、OAuth／API 常數
+│   │   └── api-extraction.ts  # curl／對話文字 → API 候選（純邏輯為主）
+│   ├── messages.ts       # dock／banner runtime 訊息字串常數（與型別）
+│   ├── background.ts     # MV3 service worker 源碼
 │   ├── panel.scss
 │   └── content.ts
 ├── scripts/
-│   └── build.mjs
+│   ├── build.mjs
+│   ├── build-css.mjs
+│   ├── build-watch.mjs
+│   ├── compile-panel-scss.mjs
+│   └── check-node.mjs
 ├── tsconfig.json
 ├── ARCHITECTURE.md
 └── AGENT.md

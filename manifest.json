@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Personal Workstation Helper",
+  "name": "Aiii 個人化小工具",
   "version": "1.0.0",
-  "description": "Personal workstation internal API helper",
+  "description": "嘗試與 aiii 小幫手對話，建立自己的工作流程",
   "action": {
-    "default_title": "Personal Helper"
+    "default_title": "Personal Helper 12231313"
   },
   "background": {
     "service_worker": "background.js"

@@ -3,15 +3,22 @@
   "version": "1.0.0",
   "private": true,
   "engines": {
-    "node": ">=22 <23"
+    "node": ">=22"
   },
   "scripts": {
+    "prebuild": "node scripts/check-node.mjs",
     "build": "node scripts/build.mjs",
-    "build:css": "node scripts/build-css.mjs"
+    "build:dev": "DEV=1 node scripts/build.mjs",
+    "build:prod": "PROD=1 node scripts/build.mjs",
+    "build:css": "node scripts/build-css.mjs",
+    "build:watch": "node scripts/check-node.mjs && node scripts/build-watch.mjs",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {},
   "devDependencies": {
+    "@types/chrome": "^0.1.40",
     "esbuild": "^0.25.9",
-    "sass": "^1.93.2"
+    "sass": "^1.93.2",
+    "typescript": "^6.0.3"
   }
 }

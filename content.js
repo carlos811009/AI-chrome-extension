@@ -1,11 +1,19 @@
 "use strict";
 (() => {
-  const DOCK_SHELL_ID = "personal-extension-dock-shell";
-  const DOCK_RESIZE_ID = "personal-extension-resize-handle";
-  const DOCK_WIDTH_KEY = "personalExtDockWidth";
-  const DOCK_MIN_WIDTH = 280;
-  const DOCK_MAX_WIDTH = 860;
-  const DOCK_DEFAULT_WIDTH = 360;
+  // src/messages.ts
+  var TOGGLE_HELLO_DOCK = "TOGGLE_HELLO_DOCK";
+  var OPEN_HELLO_DOCK = "OPEN_HELLO_DOCK";
+  var CLOSE_HELLO_DOCK = "CLOSE_HELLO_DOCK";
+  var SHOW_HELLO_BANNER = "SHOW_HELLO_BANNER";
+
+  // src/content.ts
+  var DOCK_SHELL_ID = "personal-extension-dock-shell";
+  var DOCK_RESIZE_ID = "personal-extension-resize-handle";
+  var DOCK_HOST_CSS_ID = "personal-extension-dock-host-css";
+  var DOCK_WIDTH_KEY = "personalExtDockWidth";
+  var DOCK_MIN_WIDTH = 280;
+  var DOCK_MAX_WIDTH = 860;
+  var DOCK_DEFAULT_WIDTH = 360;
   function getSavedWidth() {
     const raw = sessionStorage.getItem(DOCK_WIDTH_KEY);
     const n = Number(raw);
@@ -14,7 +22,7 @@
     }
     return DOCK_DEFAULT_WIDTH;
   }
-  const INLINE_STYLE_KEYS = {
+  var INLINE_STYLE_KEYS = {
     htmlPaddingRight: "data-personalExtHtmlPaddingRight",
     htmlWidth: "data-personalExtHtmlWidth",
     htmlBoxSizing: "data-personalExtHtmlBoxSizing",
@@ -23,8 +31,8 @@
     bodyWidth: "data-personalExtBodyWidth",
     bodyBoxSizing: "data-personalExtBodyBoxSizing"
   };
-  const DOCK_OPEN_CLASS = "personal-extension-dock-open";
-  const extensionChrome = globalThis.chrome;
+  var DOCK_OPEN_CLASS = "personal-extension-dock-open";
+  var extensionChrome = globalThis.chrome;
   function removeDock() {
     const shell = document.getElementById(DOCK_SHELL_ID);
     if (shell) shell.remove();
@@ -35,6 +43,18 @@
   }
   function readRememberedInlineStyle(key) {
     return document.documentElement.getAttribute(key) ?? "";
+  }
+  function applyHostDockLayoutCss() {
+    if (document.getElementById(DOCK_HOST_CSS_ID)) return;
+    const style = document.createElement("style");
+    style.id = DOCK_HOST_CSS_ID;
+    style.textContent = `html.personal-extension-dock-open .MatContainer {
+  min-width: 0 !important;
+}`;
+    (document.head ?? document.documentElement).appendChild(style);
+  }
+  function removeHostDockLayoutCss() {
+    document.getElementById(DOCK_HOST_CSS_ID)?.remove();
   }
   function applyCompactionStyles(width) {
     const html = document.documentElement;
@@ -48,6 +68,7 @@
     html.style.boxSizing = "border-box";
     html.style.width = "100%";
     html.style.overflowX = "hidden";
+    applyHostDockLayoutCss();
     if (!body) return;
     rememberInlineStyle(INLINE_STYLE_KEYS.bodyPaddingRight, body.style.paddingRight);
     rememberInlineStyle(INLINE_STYLE_KEYS.bodyWidth, body.style.width);
@@ -60,6 +81,7 @@
     if (document.body) document.body.style.paddingRight = `${width}px`;
   }
   function restoreCompactionStyles() {
+    removeHostDockLayoutCss();
     const html = document.documentElement;
     const body = document.body;
     html.classList.remove(DOCK_OPEN_CLASS);
@@ -160,19 +182,19 @@
     createDock();
   }
   extensionChrome?.runtime?.onMessage?.addListener((message) => {
-    if (message?.type === "CLOSE_HELLO_DOCK") {
+    if (message?.type === CLOSE_HELLO_DOCK) {
       if (isDockOpen()) removeDock();
       return;
     }
-    if (message?.type === "TOGGLE_HELLO_DOCK") {
+    if (message?.type === TOGGLE_HELLO_DOCK) {
       toggleDock();
       return;
     }
-    if (message?.type === "OPEN_HELLO_DOCK") {
+    if (message?.type === OPEN_HELLO_DOCK) {
       openDockIfClosed();
       return;
     }
-    if (message?.type !== "SHOW_HELLO_BANNER") return;
+    if (message?.type !== SHOW_HELLO_BANNER) return;
     const old = document.getElementById("personal-extension-banner");
     if (old) old.remove();
     const banner = document.createElement("div");

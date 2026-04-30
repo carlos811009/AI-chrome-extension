@@ -1,272 +1,23 @@
 "use strict";
 (() => {
-  const STORAGE_KEY = "chatMessages";
-  const SESSION_ID_KEY = "chatSessionId";
-  const WORKFLOWS_KEY = "savedWorkflows";
-  const WORKFLOW_EXPORT_FORMAT = "personal-extension-workflow";
-  const WORKFLOW_EXPORT_VERSION = 1;
-  const EXEC_RESULTS_KEY = "execResults";
-  const AUTH_STATE_KEY = "authState";
-  const CUSTOM_APIS_KEY = "customApis";
-  const MAX_MESSAGES = 40;
-  const GOOGLE_OAUTH_CLIENT_ID = "";
-  const GOOGLE_OAUTH_SCOPE = "openid email profile";
-  const ALLOWED_GOOGLE_EMAIL_SUFFIX = "";
-  function isAllowedAiiiEmail(email) {
-    const normalized = email.trim().toLowerCase();
-    if (!normalized.includes("@")) return false;
-    return normalized.endsWith(ALLOWED_GOOGLE_EMAIL_SUFFIX);
-  }
-  const FIREBASE_WEB_API_KEY = "";
-  const AGENT_CHAT_API = "";
-  const toastStatusEl = document.getElementById("toastStatus");
-  const toggleChatButton = document.getElementById("toggleChat");
-  const chatPanelEl = document.getElementById("chatPanel");
-  const chatMessagesEl = document.getElementById("chatMessages");
-  const chatFormEl = document.getElementById("chatForm");
-  const chatInputEl = document.getElementById("chatInput");
-  const sendMessageButton = document.getElementById("sendMessage");
-  const clearChatButton = document.getElementById("clearChat");
-  const authStatusEl = document.getElementById("authStatus");
-  const authorizeGoogleButton = document.getElementById("authorizeGoogle");
-  const closeDockButton = document.getElementById("closeDock");
-  const oauthInfoEl = document.getElementById("oauthInfo");
-  const toggleWorkflowsButton = document.getElementById("toggleWorkflows");
-  const workflowPanelEl = document.getElementById("workflowPanel");
-  const toggleCurlParserButton = document.getElementById("toggleCurlParser");
-  const curlParserPanelEl = document.getElementById("curlParserPanel");
-  const toggleManualApiButton = document.getElementById("toggleManualApi");
-  const manualApiPanelEl = document.getElementById("manualApiPanel");
-  const apiCandidatesEl = document.getElementById("apiCandidates");
-  const manualApiNameEl = document.getElementById("manualApiName");
-  const manualApiPathEl = document.getElementById("manualApiPath");
-  const manualApiPurposeEl = document.getElementById("manualApiPurpose");
-  const manualApiCurlEl = document.getElementById("manualApiCurl");
-  const parseCurlButton = document.getElementById("parseCurl");
-  const manualApiMethodEl = document.getElementById("manualApiMethod");
-  const manualApiParamsRowsEl = document.getElementById("manualApiParamsRows");
-  const addParamRowButton = document.getElementById("addParamRow");
-  const manualApiHeadersRowsEl = document.getElementById("manualApiHeadersRows");
-  const addHeaderRowButton = document.getElementById("addHeaderRow");
-  const manualApiBodyEl = document.getElementById("manualApiBody");
-  const addManualApiButton = document.getElementById("addManualApi");
-  const manualApiActionsEl = document.getElementById("manualApiActions");
-  const clearManualApiButton = document.getElementById("clearManualApi");
-  const apiDetailNameEl = document.getElementById("apiDetailName");
-  const apiDetailPurposeEl = document.getElementById("apiDetailPurpose");
-  const apiDetailParamsEl = document.getElementById("apiDetailParams");
-  const cancelApiDetailButton = document.getElementById("cancelApiDetail");
-  const apiDetailActionsEl = document.getElementById("apiDetailActions");
-  const addStepButton = document.getElementById("addStep");
-  const saveDetailApiButton = document.getElementById("saveDetailApi");
-  const updateDetailApiButton = document.getElementById("updateDetailApi");
-  const draftStepsEl = document.getElementById("draftSteps");
-  const runWorkflowButton = document.getElementById("runWorkflow");
-  const saveWorkflowButton = document.getElementById("saveWorkflow");
-  const clearDraftButton = document.getElementById("clearDraft");
-  const draftWorkflowNameInputEl = document.getElementById("draftWorkflowName");
-  const savedWorkflowsEl = document.getElementById("savedWorkflows");
-  const toggleSavedApisButton = document.getElementById("toggleSavedApis");
-  const savedApisPanelEl = document.getElementById("savedApisPanel");
-  const savedApisListEl = document.getElementById("savedApisList");
-  const toggleSavedWorkflowsButton = document.getElementById("toggleSavedWorkflows");
-  const savedWorkflowsPanelEl = document.getElementById("savedWorkflowsPanel");
-  const executionResultSectionEl = document.getElementById("executionResultSection");
-  const toggleExecutionResultButton = document.getElementById("toggleExecutionResult");
-  const executionResultPanelEl = document.getElementById("executionResultPanel");
-  const executionResultListEl = document.getElementById("executionResultList");
-  const clearExecutionResultButton = document.getElementById("clearExecutionResult");
-  const panelBodyEl = document.querySelector(".panel-body");
-  const exportDraftWorkflowJsonButton = document.getElementById("exportDraftWorkflowJson");
-  const copyDraftWorkflowJsonButton = document.getElementById("copyDraftWorkflowJson");
-  const importWorkflowJsonInputEl = document.getElementById("importWorkflowJsonInput");
-  const importWorkflowToDraftButton = document.getElementById("importWorkflowToDraft");
-  const MAX_EXEC_RESULTS = 10;
-  let execResults = [];
-  let messages = [];
-  let isAuthorized = false;
-  let firebaseIdToken = "";
-  let googleAccessToken = "";
-  let authExpiresAt = 0;
-  let accountEmail = "";
-  let chatSessionId = globalThis.crypto?.randomUUID?.() || `session-${Date.now()}`;
-  let apiCandidates = [];
-  let customApiSpecs = [];
-  let savedWorkflows = [];
-  let draftSteps = [];
-  let selectedApiIndex = -1;
-  let pinnedDetailSpec = null;
-  let pinnedSavedApiIndex = -1;
-  let chatPanelOpen = true;
-  let workflowPanelOpen = true;
-  let curlParserOpen = false;
-  let manualApiOpen = false;
-  let savedWorkflowsOpen = false;
-  let savedApisOpen = false;
-  let editedDetailSpec = null;
-  let editingStepIndex = -1;
-  let editingApiIndex = -1;
-  let currentWorkflowName = "";
-  let draftNameFromImport = false;
-  const fallbackStorage = /* @__PURE__ */ new Map();
-  const extensionChrome = typeof chrome !== "undefined" ? chrome : void 0;
-  function isAuthStateValid(state) {
-    return Boolean(
-      state.firebaseIdToken && state.googleAccessToken && state.expiresAt && Number.isFinite(state.expiresAt) && Date.now() < state.expiresAt
-    );
-  }
-  function getCurrentAuthState() {
-    if (!firebaseIdToken || !googleAccessToken || !authExpiresAt || Date.now() >= authExpiresAt) return null;
-    return {
-      firebaseIdToken,
-      googleAccessToken,
-      expiresAt: authExpiresAt,
-      accountEmail
-    };
-  }
-  function isAuthExpired() {
-    if (!isAuthorized || !firebaseIdToken) return true;
-    if (authExpiresAt > 0 && Date.now() >= authExpiresAt) return true;
-    return false;
-  }
-  function canUseAuthenticatedFeatures() {
-    return Boolean(
-      isAuthorized && firebaseIdToken && authExpiresAt > 0 && Date.now() < authExpiresAt && isAllowedAiiiEmail(accountEmail)
-    );
-  }
-  function syncPanelBodyAuthLock() {
-    if (!panelBodyEl) return;
-    panelBodyEl.classList.toggle("panel-body--auth-locked", !canUseAuthenticatedFeatures());
-  }
-  function clearAuthStateInMemory() {
-    isAuthorized = false;
-    firebaseIdToken = "";
-    googleAccessToken = "";
-    authExpiresAt = 0;
-    accountEmail = "";
-    syncPanelBodyAuthLock();
-  }
-  function notifyAuthExpired() {
-    clearAuthStateInMemory();
-    setChatEnabled(false);
-    const msg = "\u6388\u6B0A\u5DF2\u5931\u6548\uFF0C\u8ACB\u91CD\u65B0\u9EDE\u64CA\u300CGoogle \u6388\u6B0A\u300D\u767B\u5165\u3002";
-    setAuthStatus(msg, "error");
-    setToast(msg, "error", 5e3);
-    authorizeGoogleButton.classList.add("auth-expired-pulse");
-  }
-  function setAuthStatus(text, status = "normal") {
-    authStatusEl.textContent = text;
-    authStatusEl.classList.remove("ok", "error");
-    if (status !== "normal") authStatusEl.classList.add(status);
-  }
-  let toastTimer = null;
-  function copyToClipboard(text, btn) {
-    const succeed = () => {
-      btn.textContent = "\u5DF2\u8907\u88FD \u2713";
-      setTimeout(() => {
-        btn.textContent = "\u8907\u88FD";
-      }, 1500);
-    };
-    const fail = () => setToast("\u8907\u88FD\u5931\u6557\uFF0C\u8ACB\u624B\u52D5\u9078\u53D6\u6587\u5B57\u3002", "error");
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(succeed).catch(() => {
-        try {
-          const ta = document.createElement("textarea");
-          ta.value = text;
-          ta.style.position = "fixed";
-          ta.style.opacity = "0";
-          document.body.appendChild(ta);
-          ta.focus();
-          ta.select();
-          const ok = document.execCommand("copy");
-          document.body.removeChild(ta);
-          ok ? succeed() : fail();
-        } catch {
-          fail();
-        }
-      });
-    } else {
-      try {
-        const ta = document.createElement("textarea");
-        ta.value = text;
-        ta.style.position = "fixed";
-        ta.style.opacity = "0";
-        document.body.appendChild(ta);
-        ta.focus();
-        ta.select();
-        const ok = document.execCommand("copy");
-        document.body.removeChild(ta);
-        ok ? succeed() : fail();
-      } catch {
-        fail();
-      }
-    }
-  }
-  function setToast(text, status = "normal", autoDismissMs = 4e3) {
-    if (toastTimer) {
-      clearTimeout(toastTimer);
-      toastTimer = null;
-    }
-    toastStatusEl.textContent = text;
-    toastStatusEl.classList.remove("ok", "error", "hidden");
-    if (status !== "normal") toastStatusEl.classList.add(status);
-    if (autoDismissMs > 0) {
-      toastTimer = setTimeout(() => {
-        toastStatusEl.classList.add("hidden");
-        toastTimer = null;
-      }, autoDismissMs);
-    }
-  }
-  function setOAuthInfo(text) {
-    oauthInfoEl.textContent = text;
-  }
-  function updateWorkflowToggleLabel() {
-    toggleWorkflowsButton.textContent = workflowPanelOpen ? "\u5E38\u7528\u5DE5\u4F5C\u6D41\u7A0B \u25BE" : "\u5E38\u7528\u5DE5\u4F5C\u6D41\u7A0B \u25B8";
-  }
-  function setCurlParserOpen(open) {
-    curlParserOpen = open;
-    curlParserPanelEl.classList.toggle("collapsed", !open);
-    toggleCurlParserButton.textContent = open ? "\u89E3\u6790 Curl \u25BE" : "\u89E3\u6790 Curl \u25B8";
-  }
-  function setManualApiOpen(open) {
-    manualApiOpen = open;
-    manualApiPanelEl.classList.toggle("collapsed", !open);
-    toggleManualApiButton.textContent = open ? "\u81EA\u8A02 API \u25BE" : "\u81EA\u8A02 API \u25B8";
-  }
-  function setSavedWorkflowsOpen(open) {
-    savedWorkflowsOpen = open;
-    savedWorkflowsPanelEl.classList.toggle("collapsed", !open);
-    toggleSavedWorkflowsButton.textContent = open ? "\u5DF2\u5132\u5B58\u6D41\u7A0B \u25BE" : "\u5DF2\u5132\u5B58\u6D41\u7A0B \u25B8";
-  }
-  function setSavedApisOpen(open) {
-    savedApisOpen = open;
-    savedApisPanelEl.classList.toggle("collapsed", !open);
-    toggleSavedApisButton.textContent = open ? "\u5DF2\u5132\u5B58\u7684 API \u25BE" : "\u5DF2\u5132\u5B58\u7684 API \u25B8";
-  }
-  function setChatPanelOpen(open) {
-    chatPanelOpen = open;
-    chatPanelEl.classList.toggle("collapsed", !open);
-    toggleChatButton.textContent = open ? "AI \u5C0F\u5E6B\u624B \u25BE" : "AI \u5C0F\u5E6B\u624B \u25B8";
-  }
-  function setWorkflowPanelOpen(open) {
-    workflowPanelOpen = open;
-    workflowPanelEl.classList.toggle("collapsed", !open);
-    updateWorkflowToggleLabel();
-  }
-  function setChatEnabled(enabled) {
-    chatInputEl.disabled = !enabled;
-    sendMessageButton.disabled = !enabled;
-    chatInputEl.placeholder = enabled ? "\u4F8B\u5982\uFF1A\u696D\u52D9\u96E2\u8077\u4E86\uFF0C\u6211\u8981\u79FB\u9664\u4ED6\u7684 sales \u8207 lineUser \u8EAB\u4EFD" : "\u8ACB\u5148\u5B8C\u6210 Google \u6388\u6B0A\u5F8C\uFF0C\u624D\u53EF\u4F7F\u7528\u5C0D\u8A71\u7A97";
-    syncPanelBodyAuthLock();
-  }
-  function buildMessageWithSkillDirective(rawMessage, useSkill) {
-    if (!useSkill) return rawMessage;
-    return `${rawMessage}
+  // src/panel/constants.ts
+  var STORAGE_KEY = "chatMessages";
+  var SESSION_ID_KEY = "chatSessionId";
+  var WORKFLOWS_KEY = "savedWorkflows";
+  var WORKFLOW_EXPORT_FORMAT = "personal-extension-workflow";
+  var WORKFLOW_EXPORT_VERSION = 1;
+  var EXEC_RESULTS_KEY = "execResults";
+  var AUTH_STATE_KEY = "authState";
+  var CUSTOM_APIS_KEY = "customApis";
+  var MAX_MESSAGES = 40;
+  var GOOGLE_OAUTH_CLIENT_ID = "";
+  var GOOGLE_OAUTH_SCOPE = "openid email profile";
+  var ALLOWED_GOOGLE_EMAIL_SUFFIX = "";
+  var FIREBASE_WEB_API_KEY = "";
+  var AGENT_CHAT_API = "";
+  var MAX_EXEC_RESULTS = 10;
 
-[\u7CFB\u7D71\u6307\u4EE4]
-\u82E5\u4F60\u5224\u65B7\u6709\u53EF\u7528 skill \u6216\u5DE5\u5177\uFF0C\u8ACB\u512A\u5148\u4F7F\u7528 skill \u4F86\u56DE\u7B54\uFF0C\u4E26\u5728\u56DE\u8986\u958B\u982D\u7C21\u77ED\u8AAA\u660E\u300C\u5DF2\u4F7F\u7528\u7684 skill \u8207\u539F\u56E0\u300D\u3002
-\u82E5\u7121\u5408\u9069 skill\uFF0C\u8ACB\u660E\u78BA\u8AAA\u660E\u300C\u672C\u6B21\u4E0D\u4F7F\u7528 skill\u300D\u4E26\u76F4\u63A5\u7D66\u4E00\u822C\u56DE\u7B54\u3002`;
-  }
+  // src/panel/api-extraction.ts
   function normalizeParams(value) {
     if (Array.isArray(value)) {
       return value.map((v) => String(v).trim()).filter(Boolean);
@@ -275,158 +26,6 @@
       return value.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
     }
     return [];
-  }
-  const HEADER_KEY_CUSTOM = "__custom__";
-  const HEADER_KEY_PRESETS = [
-    "Authorization",
-    "Content-Type",
-    "Accept",
-    "Accept-Language",
-    "x-api-key",
-    "X-API-Key",
-    "User-Agent",
-    "X-Request-Id",
-    "Cookie"
-  ];
-  function buildHeaderKeySelect(selectedKey) {
-    const select = document.createElement("select");
-    select.className = "header-key-select";
-    const empty = document.createElement("option");
-    empty.value = "";
-    empty.textContent = "\u9078\u64C7 Key";
-    select.appendChild(empty);
-    HEADER_KEY_PRESETS.forEach((preset) => {
-      const opt = document.createElement("option");
-      opt.value = preset;
-      opt.textContent = preset;
-      select.appendChild(opt);
-    });
-    const customOpt = document.createElement("option");
-    customOpt.value = HEADER_KEY_CUSTOM;
-    customOpt.textContent = "\u81EA\u8A02\u2026";
-    select.appendChild(customOpt);
-    if (selectedKey && HEADER_KEY_PRESETS.includes(selectedKey)) {
-      select.value = selectedKey;
-    } else if (selectedKey) {
-      select.value = HEADER_KEY_CUSTOM;
-    }
-    return select;
-  }
-  function syncHeaderRowCustomVisibility(row) {
-    const select = row.querySelector(".header-key-select");
-    const custom = row.querySelector(".header-key-custom");
-    if (!select || !custom) return;
-    const isCustom = select.value === HEADER_KEY_CUSTOM;
-    custom.classList.toggle("visible", isCustom);
-    if (!isCustom) custom.value = "";
-  }
-  function appendManualHeaderRow(key = "", value = "") {
-    const row = document.createElement("div");
-    row.className = "header-row";
-    const wrap = document.createElement("div");
-    wrap.className = "header-key-wrap";
-    const select = buildHeaderKeySelect(key);
-    const customKey = document.createElement("input");
-    customKey.type = "text";
-    customKey.className = "header-key-custom";
-    customKey.placeholder = "\u81EA\u8A02 Key";
-    if (key && !HEADER_KEY_PRESETS.includes(key)) {
-      customKey.value = key;
-      customKey.classList.add("visible");
-    }
-    const valInput = document.createElement("input");
-    valInput.type = "text";
-    valInput.className = "header-value";
-    valInput.placeholder = "Value";
-    valInput.value = value;
-    const removeBtn = document.createElement("button");
-    removeBtn.type = "button";
-    removeBtn.className = "header-remove";
-    removeBtn.textContent = "\u79FB\u9664";
-    removeBtn.addEventListener("click", () => {
-      row.remove();
-      if (!manualApiHeadersRowsEl.querySelector(".header-row")) appendManualHeaderRow();
-    });
-    select.addEventListener("change", () => {
-      syncHeaderRowCustomVisibility(row);
-    });
-    wrap.appendChild(select);
-    wrap.appendChild(customKey);
-    row.appendChild(wrap);
-    row.appendChild(valInput);
-    row.appendChild(removeBtn);
-    manualApiHeadersRowsEl.appendChild(row);
-    syncHeaderRowCustomVisibility(row);
-  }
-  function renderManualHeaderRowsFromObject(headers) {
-    manualApiHeadersRowsEl.replaceChildren();
-    const entries = Object.entries(headers).filter(([k]) => k.trim());
-    if (!entries.length) {
-      appendManualHeaderRow();
-      return;
-    }
-    entries.forEach(([k, v]) => appendManualHeaderRow(k, v));
-  }
-  function collectManualHeaders() {
-    const out = {};
-    manualApiHeadersRowsEl.querySelectorAll(".header-row").forEach((node) => {
-      const row = node;
-      const select = row.querySelector(".header-key-select");
-      const custom = row.querySelector(".header-key-custom");
-      const valInput = row.querySelector(".header-value");
-      if (!select || !valInput) return;
-      let key = "";
-      if (select.value === HEADER_KEY_CUSTOM) key = custom.value.trim();
-      else key = select.value.trim();
-      const val = valInput.value.trim();
-      if (key && val) out[key] = val;
-    });
-    return out;
-  }
-  function appendManualParamRow(key = "", value = "") {
-    const row = document.createElement("div");
-    row.className = "header-row";
-    const keyInput = document.createElement("input");
-    keyInput.type = "text";
-    keyInput.className = "header-value";
-    keyInput.placeholder = "Param key";
-    keyInput.value = key;
-    const valInput = document.createElement("input");
-    valInput.type = "text";
-    valInput.className = "header-value";
-    valInput.placeholder = "Value\uFF08\u53EF\u7A7A\uFF09";
-    valInput.value = value;
-    const removeBtn = document.createElement("button");
-    removeBtn.type = "button";
-    removeBtn.className = "header-remove";
-    removeBtn.textContent = "\u79FB\u9664";
-    removeBtn.addEventListener("click", () => {
-      row.remove();
-      if (!manualApiParamsRowsEl.querySelector(".header-row")) appendManualParamRow();
-    });
-    row.appendChild(keyInput);
-    row.appendChild(valInput);
-    row.appendChild(removeBtn);
-    manualApiParamsRowsEl.appendChild(row);
-  }
-  function renderManualParamsRows(params) {
-    manualApiParamsRowsEl.replaceChildren();
-    const clean = params.filter((p) => p.key.trim());
-    if (!clean.length) {
-      appendManualParamRow();
-      return;
-    }
-    clean.forEach((p) => appendManualParamRow(p.key, p.value));
-  }
-  function collectManualParams() {
-    const keys = [];
-    manualApiParamsRowsEl.querySelectorAll(".header-row").forEach((node) => {
-      const row = node;
-      const inputs = row.querySelectorAll("input");
-      const key = inputs[0]?.value.trim() ?? "";
-      if (key) keys.push(key);
-    });
-    return Array.from(new Set(keys));
   }
   function inferParamEntries(path, body) {
     const map = /* @__PURE__ */ new Map();
@@ -635,18 +234,6 @@
     }
     return void 0;
   }
-  function getAllApiCandidates() {
-    return [...apiCandidates];
-  }
-  function refreshApiDetailActions(spec) {
-    const hasSpec = !!spec;
-    const savedIndex = pinnedSavedApiIndex;
-    addStepButton.disabled = !hasSpec;
-    saveDetailApiButton.disabled = !hasSpec;
-    updateDetailApiButton.disabled = !hasSpec || savedIndex < 0;
-    updateDetailApiButton.style.display = savedIndex >= 0 ? "block" : "none";
-    apiDetailActionsEl.classList.toggle("hidden", !hasSpec);
-  }
   function extractApiCandidatesFromText(text) {
     const specs = /* @__PURE__ */ new Map();
     const upsert = (next) => {
@@ -763,6 +350,427 @@
       }
     }
     return Array.from(specs.values()).slice(0, 20);
+  }
+
+  // src/messages.ts
+  var CLOSE_HELLO_DOCK = "CLOSE_HELLO_DOCK";
+
+  // src/panel.ts
+  function isAllowedAiiiEmail(email) {
+    const normalized = email.trim().toLowerCase();
+    if (!normalized.includes("@")) return false;
+    return normalized.endsWith(ALLOWED_GOOGLE_EMAIL_SUFFIX);
+  }
+  var toastStatusEl = document.getElementById("toastStatus");
+  var toggleChatButton = document.getElementById("toggleChat");
+  var chatPanelEl = document.getElementById("chatPanel");
+  var chatMessagesEl = document.getElementById("chatMessages");
+  var chatFormEl = document.getElementById("chatForm");
+  var chatInputEl = document.getElementById("chatInput");
+  var sendMessageButton = document.getElementById("sendMessage");
+  var clearChatButton = document.getElementById("clearChat");
+  var authStatusEl = document.getElementById("authStatus");
+  var authorizeGoogleButton = document.getElementById("authorizeGoogle");
+  var closeDockButton = document.getElementById("closeDock");
+  var oauthInfoEl = document.getElementById("oauthInfo");
+  var toggleWorkflowsButton = document.getElementById("toggleWorkflows");
+  var workflowPanelEl = document.getElementById("workflowPanel");
+  var toggleCurlParserButton = document.getElementById("toggleCurlParser");
+  var curlParserPanelEl = document.getElementById("curlParserPanel");
+  var toggleManualApiButton = document.getElementById("toggleManualApi");
+  var manualApiPanelEl = document.getElementById("manualApiPanel");
+  var apiCandidatesEl = document.getElementById("apiCandidates");
+  var manualApiNameEl = document.getElementById("manualApiName");
+  var manualApiPathEl = document.getElementById("manualApiPath");
+  var manualApiPurposeEl = document.getElementById("manualApiPurpose");
+  var manualApiCurlEl = document.getElementById("manualApiCurl");
+  var parseCurlButton = document.getElementById("parseCurl");
+  var manualApiMethodEl = document.getElementById("manualApiMethod");
+  var manualApiParamsRowsEl = document.getElementById("manualApiParamsRows");
+  var addParamRowButton = document.getElementById("addParamRow");
+  var manualApiHeadersRowsEl = document.getElementById("manualApiHeadersRows");
+  var addHeaderRowButton = document.getElementById("addHeaderRow");
+  var manualApiBodyEl = document.getElementById("manualApiBody");
+  var addManualApiButton = document.getElementById("addManualApi");
+  var manualApiActionsEl = document.getElementById("manualApiActions");
+  var clearManualApiButton = document.getElementById("clearManualApi");
+  var apiDetailNameEl = document.getElementById("apiDetailName");
+  var apiDetailPurposeEl = document.getElementById("apiDetailPurpose");
+  var apiDetailParamsEl = document.getElementById("apiDetailParams");
+  var cancelApiDetailButton = document.getElementById("cancelApiDetail");
+  var apiDetailActionsEl = document.getElementById("apiDetailActions");
+  var addStepButton = document.getElementById("addStep");
+  var saveDetailApiButton = document.getElementById("saveDetailApi");
+  var updateDetailApiButton = document.getElementById("updateDetailApi");
+  var draftStepsEl = document.getElementById("draftSteps");
+  var runWorkflowButton = document.getElementById("runWorkflow");
+  var saveWorkflowButton = document.getElementById("saveWorkflow");
+  var clearDraftButton = document.getElementById("clearDraft");
+  var draftWorkflowNameInputEl = document.getElementById("draftWorkflowName");
+  var savedWorkflowsEl = document.getElementById("savedWorkflows");
+  var toggleSavedApisButton = document.getElementById("toggleSavedApis");
+  var savedApisPanelEl = document.getElementById("savedApisPanel");
+  var savedApisListEl = document.getElementById("savedApisList");
+  var toggleSavedWorkflowsButton = document.getElementById("toggleSavedWorkflows");
+  var savedWorkflowsPanelEl = document.getElementById("savedWorkflowsPanel");
+  var executionResultSectionEl = document.getElementById("executionResultSection");
+  var toggleExecutionResultButton = document.getElementById("toggleExecutionResult");
+  var executionResultPanelEl = document.getElementById("executionResultPanel");
+  var executionResultListEl = document.getElementById("executionResultList");
+  var clearExecutionResultButton = document.getElementById("clearExecutionResult");
+  var panelBodyEl = document.querySelector(".panel-body");
+  var exportDraftWorkflowJsonButton = document.getElementById("exportDraftWorkflowJson");
+  var copyDraftWorkflowJsonButton = document.getElementById("copyDraftWorkflowJson");
+  var importWorkflowJsonInputEl = document.getElementById("importWorkflowJsonInput");
+  var importWorkflowToDraftButton = document.getElementById("importWorkflowToDraft");
+  var execResults = [];
+  var messages = [];
+  var isAuthorized = false;
+  var firebaseIdToken = "";
+  var googleAccessToken = "";
+  var authExpiresAt = 0;
+  var accountEmail = "";
+  var chatSessionId = globalThis.crypto?.randomUUID?.() || `session-${Date.now()}`;
+  var apiCandidates = [];
+  var customApiSpecs = [];
+  var savedWorkflows = [];
+  var draftSteps = [];
+  var selectedApiIndex = -1;
+  var pinnedDetailSpec = null;
+  var pinnedSavedApiIndex = -1;
+  var chatPanelOpen = true;
+  var workflowPanelOpen = true;
+  var curlParserOpen = false;
+  var manualApiOpen = false;
+  var savedWorkflowsOpen = false;
+  var savedApisOpen = false;
+  var editedDetailSpec = null;
+  var editingStepIndex = -1;
+  var editingApiIndex = -1;
+  var currentWorkflowName = "";
+  var draftNameFromImport = false;
+  var fallbackStorage = /* @__PURE__ */ new Map();
+  var extensionChrome = typeof chrome !== "undefined" ? chrome : void 0;
+  function isAuthStateValid(state) {
+    return Boolean(
+      state.firebaseIdToken && state.googleAccessToken && state.expiresAt && Number.isFinite(state.expiresAt) && Date.now() < state.expiresAt
+    );
+  }
+  function getCurrentAuthState() {
+    if (!firebaseIdToken || !googleAccessToken || !authExpiresAt || Date.now() >= authExpiresAt) return null;
+    return {
+      firebaseIdToken,
+      googleAccessToken,
+      expiresAt: authExpiresAt,
+      accountEmail
+    };
+  }
+  function isAuthExpired() {
+    if (!isAuthorized || !firebaseIdToken) return true;
+    if (authExpiresAt > 0 && Date.now() >= authExpiresAt) return true;
+    return false;
+  }
+  function canUseAuthenticatedFeatures() {
+    return Boolean(
+      isAuthorized && firebaseIdToken && authExpiresAt > 0 && Date.now() < authExpiresAt && isAllowedAiiiEmail(accountEmail)
+    );
+  }
+  function syncPanelBodyAuthLock() {
+    if (!panelBodyEl) return;
+    panelBodyEl.classList.toggle("panel-body--auth-locked", !canUseAuthenticatedFeatures());
+  }
+  function clearAuthStateInMemory() {
+    isAuthorized = false;
+    firebaseIdToken = "";
+    googleAccessToken = "";
+    authExpiresAt = 0;
+    accountEmail = "";
+    syncPanelBodyAuthLock();
+  }
+  function notifyAuthExpired() {
+    clearAuthStateInMemory();
+    setChatEnabled(false);
+    const msg = "\u6388\u6B0A\u5DF2\u5931\u6548\uFF0C\u8ACB\u91CD\u65B0\u9EDE\u64CA\u300CGoogle \u6388\u6B0A\u300D\u767B\u5165\u3002";
+    setAuthStatus(msg, "error");
+    setToast(msg, "error", 5e3);
+    authorizeGoogleButton.classList.add("auth-expired-pulse");
+  }
+  function setAuthStatus(text, status = "normal") {
+    authStatusEl.textContent = text;
+    authStatusEl.classList.remove("ok", "error");
+    if (status !== "normal") authStatusEl.classList.add(status);
+  }
+  var toastTimer = null;
+  function copyToClipboard(text, btn) {
+    const succeed = () => {
+      btn.textContent = "\u5DF2\u8907\u88FD \u2713";
+      setTimeout(() => {
+        btn.textContent = "\u8907\u88FD";
+      }, 1500);
+    };
+    const fail = () => setToast("\u8907\u88FD\u5931\u6557\uFF0C\u8ACB\u624B\u52D5\u9078\u53D6\u6587\u5B57\u3002", "error");
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(succeed).catch(() => {
+        try {
+          const ta = document.createElement("textarea");
+          ta.value = text;
+          ta.style.position = "fixed";
+          ta.style.opacity = "0";
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          const ok = document.execCommand("copy");
+          document.body.removeChild(ta);
+          ok ? succeed() : fail();
+        } catch {
+          fail();
+        }
+      });
+    } else {
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        const ok = document.execCommand("copy");
+        document.body.removeChild(ta);
+        ok ? succeed() : fail();
+      } catch {
+        fail();
+      }
+    }
+  }
+  function setToast(text, status = "normal", autoDismissMs = 4e3) {
+    if (toastTimer) {
+      clearTimeout(toastTimer);
+      toastTimer = null;
+    }
+    toastStatusEl.textContent = text;
+    toastStatusEl.classList.remove("ok", "error", "hidden");
+    if (status !== "normal") toastStatusEl.classList.add(status);
+    if (autoDismissMs > 0) {
+      toastTimer = setTimeout(() => {
+        toastStatusEl.classList.add("hidden");
+        toastTimer = null;
+      }, autoDismissMs);
+    }
+  }
+  function setOAuthInfo(text) {
+    oauthInfoEl.textContent = text;
+  }
+  function updateWorkflowToggleLabel() {
+    toggleWorkflowsButton.textContent = workflowPanelOpen ? "\u5E38\u7528\u5DE5\u4F5C\u6D41\u7A0B \u25BE" : "\u5E38\u7528\u5DE5\u4F5C\u6D41\u7A0B \u25B8";
+  }
+  function setCurlParserOpen(open) {
+    curlParserOpen = open;
+    curlParserPanelEl.classList.toggle("collapsed", !open);
+    toggleCurlParserButton.textContent = open ? "\u89E3\u6790 Curl \u25BE" : "\u89E3\u6790 Curl \u25B8";
+  }
+  function setManualApiOpen(open) {
+    manualApiOpen = open;
+    manualApiPanelEl.classList.toggle("collapsed", !open);
+    toggleManualApiButton.textContent = open ? "\u81EA\u8A02 API \u25BE" : "\u81EA\u8A02 API \u25B8";
+  }
+  function setSavedWorkflowsOpen(open) {
+    savedWorkflowsOpen = open;
+    savedWorkflowsPanelEl.classList.toggle("collapsed", !open);
+    toggleSavedWorkflowsButton.textContent = open ? "\u5DF2\u5132\u5B58\u6D41\u7A0B \u25BE" : "\u5DF2\u5132\u5B58\u6D41\u7A0B \u25B8";
+  }
+  function setSavedApisOpen(open) {
+    savedApisOpen = open;
+    savedApisPanelEl.classList.toggle("collapsed", !open);
+    toggleSavedApisButton.textContent = open ? "\u5DF2\u5132\u5B58\u7684 API \u25BE" : "\u5DF2\u5132\u5B58\u7684 API \u25B8";
+  }
+  function setChatPanelOpen(open) {
+    chatPanelOpen = open;
+    chatPanelEl.classList.toggle("collapsed", !open);
+    toggleChatButton.textContent = open ? "AI \u5C0F\u5E6B\u624B \u25BE" : "AI \u5C0F\u5E6B\u624B \u25B8";
+  }
+  function setWorkflowPanelOpen(open) {
+    workflowPanelOpen = open;
+    workflowPanelEl.classList.toggle("collapsed", !open);
+    updateWorkflowToggleLabel();
+  }
+  function setChatEnabled(enabled) {
+    chatInputEl.disabled = !enabled;
+    sendMessageButton.disabled = !enabled;
+    chatInputEl.placeholder = enabled ? "\u4F8B\u5982\uFF1A\u696D\u52D9\u96E2\u8077\u4E86\uFF0C\u6211\u8981\u79FB\u9664\u4ED6\u7684 sales \u8207 lineUser \u8EAB\u4EFD" : "\u8ACB\u5148\u5B8C\u6210 Google \u6388\u6B0A\u5F8C\uFF0C\u624D\u53EF\u4F7F\u7528\u5C0D\u8A71\u7A97";
+    syncPanelBodyAuthLock();
+  }
+  function buildMessageWithSkillDirective(rawMessage, useSkill) {
+    if (!useSkill) return rawMessage;
+    return `${rawMessage}
+
+[\u7CFB\u7D71\u6307\u4EE4]
+\u82E5\u4F60\u5224\u65B7\u6709\u53EF\u7528 skill \u6216\u5DE5\u5177\uFF0C\u8ACB\u512A\u5148\u4F7F\u7528 skill \u4F86\u56DE\u7B54\uFF0C\u4E26\u5728\u56DE\u8986\u958B\u982D\u7C21\u77ED\u8AAA\u660E\u300C\u5DF2\u4F7F\u7528\u7684 skill \u8207\u539F\u56E0\u300D\u3002
+\u82E5\u7121\u5408\u9069 skill\uFF0C\u8ACB\u660E\u78BA\u8AAA\u660E\u300C\u672C\u6B21\u4E0D\u4F7F\u7528 skill\u300D\u4E26\u76F4\u63A5\u7D66\u4E00\u822C\u56DE\u7B54\u3002`;
+  }
+  var HEADER_KEY_CUSTOM = "__custom__";
+  var HEADER_KEY_PRESETS = [
+    "Authorization",
+    "Content-Type",
+    "Accept",
+    "Accept-Language",
+    "x-api-key",
+    "X-API-Key",
+    "User-Agent",
+    "X-Request-Id",
+    "Cookie"
+  ];
+  function buildHeaderKeySelect(selectedKey) {
+    const select = document.createElement("select");
+    select.className = "header-key-select";
+    const empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = "\u9078\u64C7 Key";
+    select.appendChild(empty);
+    HEADER_KEY_PRESETS.forEach((preset) => {
+      const opt = document.createElement("option");
+      opt.value = preset;
+      opt.textContent = preset;
+      select.appendChild(opt);
+    });
+    const customOpt = document.createElement("option");
+    customOpt.value = HEADER_KEY_CUSTOM;
+    customOpt.textContent = "\u81EA\u8A02\u2026";
+    select.appendChild(customOpt);
+    if (selectedKey && HEADER_KEY_PRESETS.includes(selectedKey)) {
+      select.value = selectedKey;
+    } else if (selectedKey) {
+      select.value = HEADER_KEY_CUSTOM;
+    }
+    return select;
+  }
+  function syncHeaderRowCustomVisibility(row) {
+    const select = row.querySelector(".header-key-select");
+    const custom = row.querySelector(".header-key-custom");
+    if (!select || !custom) return;
+    const isCustom = select.value === HEADER_KEY_CUSTOM;
+    custom.classList.toggle("visible", isCustom);
+    if (!isCustom) custom.value = "";
+  }
+  function appendManualHeaderRow(key = "", value = "") {
+    const row = document.createElement("div");
+    row.className = "header-row";
+    const wrap = document.createElement("div");
+    wrap.className = "header-key-wrap";
+    const select = buildHeaderKeySelect(key);
+    const customKey = document.createElement("input");
+    customKey.type = "text";
+    customKey.className = "header-key-custom";
+    customKey.placeholder = "\u81EA\u8A02 Key";
+    if (key && !HEADER_KEY_PRESETS.includes(key)) {
+      customKey.value = key;
+      customKey.classList.add("visible");
+    }
+    const valInput = document.createElement("input");
+    valInput.type = "text";
+    valInput.className = "header-value";
+    valInput.placeholder = "Value";
+    valInput.value = value;
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "header-remove";
+    removeBtn.textContent = "\u79FB\u9664";
+    removeBtn.addEventListener("click", () => {
+      row.remove();
+      if (!manualApiHeadersRowsEl.querySelector(".header-row")) appendManualHeaderRow();
+    });
+    select.addEventListener("change", () => {
+      syncHeaderRowCustomVisibility(row);
+    });
+    wrap.appendChild(select);
+    wrap.appendChild(customKey);
+    row.appendChild(wrap);
+    row.appendChild(valInput);
+    row.appendChild(removeBtn);
+    manualApiHeadersRowsEl.appendChild(row);
+    syncHeaderRowCustomVisibility(row);
+  }
+  function renderManualHeaderRowsFromObject(headers) {
+    manualApiHeadersRowsEl.replaceChildren();
+    const entries = Object.entries(headers).filter(([k]) => k.trim());
+    if (!entries.length) {
+      appendManualHeaderRow();
+      return;
+    }
+    entries.forEach(([k, v]) => appendManualHeaderRow(k, v));
+  }
+  function collectManualHeaders() {
+    const out = {};
+    manualApiHeadersRowsEl.querySelectorAll(".header-row").forEach((node) => {
+      const row = node;
+      const select = row.querySelector(".header-key-select");
+      const custom = row.querySelector(".header-key-custom");
+      const valInput = row.querySelector(".header-value");
+      if (!select || !valInput) return;
+      let key = "";
+      if (select.value === HEADER_KEY_CUSTOM) key = custom.value.trim();
+      else key = select.value.trim();
+      const val = valInput.value.trim();
+      if (key && val) out[key] = val;
+    });
+    return out;
+  }
+  function appendManualParamRow(key = "", value = "") {
+    const row = document.createElement("div");
+    row.className = "header-row";
+    const keyInput = document.createElement("input");
+    keyInput.type = "text";
+    keyInput.className = "header-value";
+    keyInput.placeholder = "Param key";
+    keyInput.value = key;
+    const valInput = document.createElement("input");
+    valInput.type = "text";
+    valInput.className = "header-value";
+    valInput.placeholder = "Value\uFF08\u53EF\u7A7A\uFF09";
+    valInput.value = value;
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "header-remove";
+    removeBtn.textContent = "\u79FB\u9664";
+    removeBtn.addEventListener("click", () => {
+      row.remove();
+      if (!manualApiParamsRowsEl.querySelector(".header-row")) appendManualParamRow();
+    });
+    row.appendChild(keyInput);
+    row.appendChild(valInput);
+    row.appendChild(removeBtn);
+    manualApiParamsRowsEl.appendChild(row);
+  }
+  function renderManualParamsRows(params) {
+    manualApiParamsRowsEl.replaceChildren();
+    const clean = params.filter((p) => p.key.trim());
+    if (!clean.length) {
+      appendManualParamRow();
+      return;
+    }
+    clean.forEach((p) => appendManualParamRow(p.key, p.value));
+  }
+  function collectManualParams() {
+    const keys = [];
+    manualApiParamsRowsEl.querySelectorAll(".header-row").forEach((node) => {
+      const row = node;
+      const inputs = row.querySelectorAll("input");
+      const key = inputs[0]?.value.trim() ?? "";
+      if (key) keys.push(key);
+    });
+    return Array.from(new Set(keys));
+  }
+  function getAllApiCandidates() {
+    return [...apiCandidates];
+  }
+  function refreshApiDetailActions(spec) {
+    const hasSpec = !!spec;
+    const savedIndex = pinnedSavedApiIndex;
+    addStepButton.disabled = !hasSpec;
+    saveDetailApiButton.disabled = !hasSpec;
+    updateDetailApiButton.disabled = !hasSpec || savedIndex < 0;
+    updateDetailApiButton.style.display = savedIndex >= 0 ? "block" : "none";
+    apiDetailActionsEl.classList.toggle("hidden", !hasSpec);
   }
   function buildDetailSection(label, defaultOpen) {
     const wrap = document.createElement("div");
@@ -2097,7 +2105,7 @@
       console.log("[personal-extension] oauthAuthorizeError", message);
     }
   }
-  const STEP_LETTERS = "abcdefghijklmnopqrstuvwxyz";
+  var STEP_LETTERS = "abcdefghijklmnopqrstuvwxyz";
   function renderExecResults() {
     executionResultListEl.replaceChildren();
     execResults.forEach((result) => {
@@ -2868,7 +2876,7 @@
     void authorizeNow();
   });
   closeDockButton.addEventListener("click", () => {
-    chrome?.runtime?.sendMessage({ type: "CLOSE_HELLO_DOCK" });
+    chrome?.runtime?.sendMessage({ type: CLOSE_HELLO_DOCK });
   });
   exportDraftWorkflowJsonButton.addEventListener("click", () => {
     if (!draftSteps.length) {
@@ -2952,7 +2960,7 @@
     clearManualForm();
     setToast("\u5DF2\u6E05\u9664\u81EA\u8A02 API \u5167\u5BB9\u3002", "normal");
   });
-  const CHAT_HEIGHT_KEY = "chat_messages_height";
+  var CHAT_HEIGHT_KEY = "chat_messages_height";
   (function initChatResizeHandle() {
     const handle = document.getElementById("chatResizeHandle");
     if (!handle) return;
