@@ -111,9 +111,7 @@ const importWorkflowToDraftButton = document.getElementById('importWorkflowToDra
 let execResults: ExecResult[] = [];
 
 let messages: ChatMessage[] = [];
-/** 目前串流中的 assistant 訊息索引（`null` 表示未在串流） */
 let streamingAssistantIndex: number | null = null;
-/** 串流剛結束的訊息索引，用於短暫顯示「已回應完畢」樣式 */
 let streamJustFinishedIndex: number | null = null;
 let streamJustFinishedClearTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -124,7 +122,6 @@ function clearStreamJustFinishedTimer(): void {
   }
 }
 
-/** 在 loadMessages 從 storage 還原完成前為 false，避免 saveMessages 以空 messages 覆蓋既有紀錄（競態） */
 let persistenceReady = false;
 let isAuthorized = false;
 let firebaseIdToken = '';
@@ -149,10 +146,8 @@ let editedDetailSpec: ApiSpec | null = null;
 let editingStepIndex = -1;
 let editingApiIndex = -1;
 let currentWorkflowName = '';
-/** 流程名稱欄是否由 JSON 匯入帶入（用於儲存時必填提示文案） */
 let draftNameFromImport = false;
 const fallbackStorage = new Map<string, string>();
-/** `chrome` 全域型別由 `tsconfig` 的 `types: ["chrome"]`（@types/chrome）提供；非 extension 環境可為 `undefined`，此時走 fallback storage。 */
 const extensionChrome = typeof chrome !== 'undefined' ? chrome : undefined;
 
 // ===== 授權狀態與共用 UI 提示 =====
@@ -192,7 +187,6 @@ function canUseAuthenticatedFeatures(): boolean {
   );
 }
 
-/** 未通過授權時鎖定 panel-body 內互動（收合鈕除外），與 setChatEnabled 併用 */
 function syncPanelBodyAuthLock(): void {
   if (!panelBodyEl) return;
   panelBodyEl.classList.toggle('panel-body--auth-locked', !canUseAuthenticatedFeatures());
@@ -287,7 +281,6 @@ function setToast(text: string, status: 'normal' | 'ok' | 'error' = 'normal', au
   }
 }
 
-/** 對話氣泡內 ``` 區塊的「複製」按鈕（事件委派，只綁一次） */
 function bindChatMarkdownCopyOnce(): void {
   const g = globalThis as { __personalExtMdCopy?: boolean };
   if (g.__personalExtMdCopy) return;
@@ -387,11 +380,7 @@ const HEADER_KEY_PRESETS = [
   'Cookie',
 ];
 
-/** 手動 API「請求名稱」：類識別字（英文或底線開頭，僅字母、數字、底線） */
-const MANUAL_API_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
-/** Query／JSON 參數鍵名 */
 const MANUAL_API_PARAM_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
-/** HTTP header 欄位名（RFC 9110 `tchar`） */
 const MANUAL_HTTP_HEADER_NAME_RE = /^[-0-9A-Za-z!#$%&'*+.^_`|~]+$/;
 
 function isManualApiPathWellFormed(path: string): boolean {
@@ -782,7 +771,7 @@ function renderApiDetail(spec: ApiSpec | null): void {
       if (k) urlParamObj[k] = v;
     });
   } catch {
-    /**/
+    void 0;
   }
   const urlParamKeys = [...new Set(Object.keys(urlParamObj))];
 
@@ -801,7 +790,7 @@ function renderApiDetail(spec: ApiSpec | null): void {
           if (k) collected[k] = v;
         });
       } catch {
-        /**/
+        void 0;
       }
       urlParamsList.querySelectorAll<HTMLDivElement>('.detail-edit-row').forEach((r) => {
         const key = (r.querySelector('.detail-edit-key-input') as HTMLInputElement)?.value.trim() ?? '';
@@ -1043,7 +1032,6 @@ function sanitizeStepForShare(step: WorkflowStep): WorkflowStep {
   };
 }
 
-/** 用於「類似流程」比對：method + 正規化後的請求目標（path 優先，否則 api；完整 URL 取 pathname） */
 function normalizeWorkflowRequestTarget(raw: string): string {
   const t = raw.trim();
   if (!t) return '';
@@ -1065,7 +1053,6 @@ function workflowStepSignature(step: WorkflowStep): string {
   return `${method}:${normalizeWorkflowRequestTarget(raw)}`;
 }
 
-/** 類似流程：與任一「已儲存流程」的 (method + 正規化 path) 序列完全相同 */
 function findSavedWorkflowWithSameSignature(steps: WorkflowStep[]): SavedWorkflow | null {
   if (!steps.length) return null;
   const sig = steps.map(workflowStepSignature).join('\n');
@@ -1103,7 +1090,7 @@ async function copyWorkflowJsonToClipboard(json: string): Promise<boolean> {
       return true;
     }
   } catch {
-    /* fallback */
+    void 0;
   }
   try {
     const ta = document.createElement('textarea');
@@ -1216,7 +1203,6 @@ function defaultImportedWorkflowName(suggested: string): string {
   return `匯入流程 ${ts}`;
 }
 
-/** 與任一已儲存流程的「名稱」完全相同（trim 後） */
 function findSavedWorkflowWithDuplicateName(name: string): SavedWorkflow | null {
   const n = name.trim();
   if (!n) return null;
@@ -1662,7 +1648,6 @@ function stripThinkingText(text: string): string {
     .replace(/^\s*(思考|thinking)\s*[:：].*$/gim, '');
 }
 
-/** Parse one SSE block (between \\n\\n). Returns event type (lowercase) or null if omitted. */
 function parseSseBlock(block: string): { eventType: string | null; payloadText: string } {
   let eventType: string | null = null;
   const dataParts: string[] = [];
@@ -1678,7 +1663,6 @@ function parseSseBlock(block: string): { eventType: string | null; payloadText: 
   return { eventType, payloadText: dataParts.join('\n') };
 }
 
-/** Only `event: delta` contributes to the chat; other `event:` types are skipped. Blocks without `event:` still emit (legacy streams that only send `data:`). */
 function shouldEmitSseDelta(eventType: string | null): boolean {
   if (eventType === null) return true;
   return eventType === 'delta';
@@ -1693,7 +1677,6 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#39;');
 }
 
-/** 將完整 URL 拆成可編輯的「基底」與「路徑＋查詢」；相對路徑則基底為空 */
 function splitRequestTargetForEditor(raw: string): { base: string; pathAndQuery: string } {
   const s = (raw || '').trim();
   if (!s) return { base: '', pathAndQuery: '' };
@@ -1731,7 +1714,6 @@ function joinRequestTargetFromEditor(base: string, pathAndQuery: string): string
   return `${baseClean}/${pathPart}`;
 }
 
-/** 從合併後的請求字串取出「不含 query」前綴與 query 字串（供 Params 編輯同步） */
 function getPathNoQueryAndSearchFromCombined(combined: string): { pathNoQuery: string; queryString: string } {
   const s = (combined || '').trim();
   if (!s) return { pathNoQuery: '', queryString: '' };
@@ -1743,7 +1725,7 @@ function getPathNoQueryAndSearchFromCombined(combined: string): { pathNoQuery: s
         queryString: u.searchParams.toString(),
       };
     } catch {
-      /**/
+      void 0;
     }
   }
   const qIdx = s.indexOf('?');
@@ -1786,7 +1768,6 @@ function renderMarkdownFromEscapedBlocks(escaped: string): string {
     .join('');
 }
 
-/** 支援 ``` 程式碼區塊與「複製」按鈕；其餘段落沿用原本 Markdown 子集 */
 function renderAssistantMarkdown(text: string): string {
   const parts: string[] = [];
   const fenceRe = /```([^\n`]*)\r?\n([\s\S]*?)```/g;
@@ -2920,7 +2901,6 @@ function clearManualApiFormValidationHints(): void {
   });
 }
 
-/** 自訂 API 表單驗證；失敗時標紅欄位並 toast。 */
 function validateManualApiForm(): boolean {
   clearManualApiFormValidationHints();
   let ok = true;
@@ -2928,9 +2908,6 @@ function validateManualApiForm(): boolean {
   const name = manualApiNameEl.value.trim();
   if (!name) {
     setFieldError(manualApiNameEl, '請填寫 API 名稱。');
-    ok = false;
-  } else if (!MANUAL_API_NAME_RE.test(name)) {
-    setFieldError(manualApiNameEl, '僅限英文字母、數字與底線，且須以英文或底線開頭。');
     ok = false;
   }
 

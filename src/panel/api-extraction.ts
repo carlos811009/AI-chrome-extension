@@ -1,6 +1,5 @@
 import type { ApiSpec } from './types';
 
-/** 將 Word／網頁貼上的彎引號、NBSP 轉成 ASCII，避免 curl 正則匹配失敗。 */
 function normalizeCurlSmartQuotes(text: string): string {
   return text
     .replace(/\u2018/g, "'")
@@ -44,7 +43,6 @@ export function inferParamEntries(path: string, body: string): Array<{ key: stri
   return Array.from(map.entries()).map(([key, value]) => ({ key, value }));
 }
 
-/** 判斷引號內字串是否像 curl 的 URL／路徑（排除 JSON、Header、純 MIME）。 */
 function looksLikeCurlUrlCandidate(s: string): boolean {
   const t = s.trim();
   if (!t) return false;
@@ -203,7 +201,6 @@ export function parseCurlCommand(curlText: string): {
   };
 }
 
-/** 從對話文字中擷取「可完整解析」的 curl 片段（圍欄內與獨立行），供 API 候選清單使用。 */
 function collectCurlSnippetsFromText(text: string): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
@@ -264,7 +261,6 @@ function apiSpecFromParsedCurl(p: NonNullable<ReturnType<typeof parseCurlCommand
   };
 }
 
-/** 用於合併「完整 URL」與相對 path，保留較完整者。 */
 function preferRicherPath(a?: string, b?: string): string | undefined {
   const x = (a ?? '').trim();
   const y = (b ?? '').trim();
@@ -275,7 +271,6 @@ function preferRicherPath(a?: string, b?: string): string | undefined {
   return x.length >= y.length ? x : y;
 }
 
-/** 候選 Map 的 key：URL 轉成 pathname+search，便於與相對路徑對齊。 */
 function endpointKey(raw: string): string {
   const t = raw.trim();
   if (!t) return '';
@@ -285,7 +280,7 @@ function endpointKey(raw: string): string {
       return (u.pathname.replace(/\/+$/, '') || '/') + u.search;
     }
   } catch {
-    // ignore
+    void 0;
   }
   return t.replace(/^\/+/, '');
 }
@@ -294,7 +289,6 @@ function pathTail2(pathKey: string): string {
   return pathKey.split('/').filter(Boolean).slice(-2).join('/');
 }
 
-/** 若已存在僅差在 host/prefix 的同一端點，合併為同一筆（避免 GET 預設與 curl POST 分兩列）。 */
 function findExistingMergeKey(map: Map<string, ApiSpec>, next: ApiSpec): string | undefined {
   const nk = endpointKey(next.path || next.api);
   const nTail = pathTail2(nk);
@@ -334,7 +328,6 @@ function _mergeApiSpecs(primary: ApiSpec[], secondary: ApiSpec[]): ApiSpec[] {
   return Array.from(map.values());
 }
 
-/** 僅從可成功解析的完整 curl 指令建立 API 候選（不掃描 JSON／Request 模型／路徑 token）。 */
 export function extractApiCandidatesFromText(text: string): ApiSpec[] {
   const specs = new Map<string, ApiSpec>();
   const upsert = (next: ApiSpec): void => {

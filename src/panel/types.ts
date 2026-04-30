@@ -47,7 +47,6 @@ export type SavedWorkflow = {
   steps: WorkflowStep[];
 };
 
-/** 流程 JSON 分享格式（單一流程） */
 export type WorkflowExportEnvelope = {
   format: 'personal-extension-workflow';
   version: number;

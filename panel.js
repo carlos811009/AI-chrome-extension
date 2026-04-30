@@ -612,7 +612,6 @@
     "X-Request-Id",
     "Cookie"
   ];
-  var MANUAL_API_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
   var MANUAL_API_PARAM_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
   var MANUAL_HTTP_HEADER_NAME_RE = /^[-0-9A-Za-z!#$%&'*+.^_`|~]+$/;
   function isManualApiPathWellFormed(path) {
@@ -2877,9 +2876,6 @@
     const name = manualApiNameEl.value.trim();
     if (!name) {
       setFieldError(manualApiNameEl, "\u8ACB\u586B\u5BEB API \u540D\u7A31\u3002");
-      ok = false;
-    } else if (!MANUAL_API_NAME_RE.test(name)) {
-      setFieldError(manualApiNameEl, "\u50C5\u9650\u82F1\u6587\u5B57\u6BCD\u3001\u6578\u5B57\u8207\u5E95\u7DDA\uFF0C\u4E14\u9808\u4EE5\u82F1\u6587\u6216\u5E95\u7DDA\u958B\u982D\u3002");
       ok = false;
     }
     const path = manualApiPathEl.value.trim();

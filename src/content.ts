@@ -14,7 +14,6 @@ const DOCK_SHELL_ID = 'personal-extension-dock-shell';
 const DOCK_RESIZE_LEFT_ID = 'personal-extension-resize-left';
 const DOCK_RESIZE_RIGHT_ID = 'personal-extension-resize-right';
 const DOCK_RESIZE_CORNER_ID = 'personal-extension-resize-se';
-/** dock 開啟時注入，覆寫部分後台（如 Angular `.MatContainer`）的 min-width，避免主殼寬度鎖死與浮窗重疊時版面怪異 */
 const DOCK_HOST_CSS_ID = 'personal-extension-dock-host-css';
 const DOCK_WIDTH_KEY = 'personalExtDockWidth';
 const DOCK_HEIGHT_KEY = 'personalExtDockHeight';
@@ -22,9 +21,7 @@ const DOCK_POS_KEY = 'personalExtDockPos';
 const DOCK_MIN_WIDTH = 280;
 const DOCK_MAX_WIDTH = 860;
 const DOCK_MIN_HEIGHT = 200;
-/** 首次開啟或無 session 紀錄時的預設寬度（窄版） */
 const DOCK_DEFAULT_WIDTH = 360;
-/** 浮窗高度上限（與預設高度換算） */
 const DOCK_FLOAT_MAX_HEIGHT_PX = 880;
 const DOCK_FLOAT_HEIGHT_VH = 0.88;
 
@@ -82,7 +79,7 @@ function saveShellHeight(h: number): void {
   try {
     sessionStorage.setItem(DOCK_HEIGHT_KEY, String(h));
   } catch {
-    /* ignore */
+    void 0;
   }
 }
 
@@ -100,7 +97,7 @@ function getSavedShellPosition(width: number, height: number): { left: number; t
       }
     }
   } catch {
-    /* ignore */
+    void 0;
   }
   return {
     left: Math.max(8, window.innerWidth - width - 12),
@@ -112,7 +109,7 @@ function saveShellPosition(left: number, top: number): void {
   try {
     sessionStorage.setItem(DOCK_POS_KEY, JSON.stringify({ left, top }));
   } catch {
-    /* ignore quota */
+    void 0;
   }
 }
 
@@ -134,7 +131,6 @@ function removeHostDockLayoutCss(): void {
   document.getElementById(DOCK_HOST_CSS_ID)?.remove();
 }
 
-/** 舊版 dock 曾寫入 html/body padding；關閉時還原（浮窗模式不再寫入，此處仍保留相容還原） */
 function restoreCompactionStyles(): void {
   removeHostDockLayoutCss();
 
