@@ -4,13 +4,12 @@ import type {
   ChatMessage,
   ChatRole,
   ExecResult,
-  ExecStepResult,
   GoogleUserInfo,
   OAuthGrantInfo,
   SavedWorkflow,
   WorkflowExportEnvelope,
   WorkflowStep,
-} from "./panel/types";
+} from './panel/types';
 import {
   AGENT_CHAT_API,
   ALLOWED_GOOGLE_EMAIL_SUFFIX,
@@ -27,116 +26,111 @@ import {
   WORKFLOWS_KEY,
   WORKFLOW_EXPORT_FORMAT,
   WORKFLOW_EXPORT_VERSION,
-} from "./panel/constants";
+} from './panel/constants';
 import {
   extractApiCandidatesFromText,
   inferParamEntries,
   inferParamsFromPathAndBody,
   parseCurlCommand,
-} from "./panel/api-extraction";
-import { CLOSE_HELLO_DOCK } from "./messages";
-
-declare const chrome:
-  | {
-      identity?: {
-        getAuthToken: (details: { interactive: boolean }, callback: (token?: string) => void) => void;
-        getProfileUserInfo: (callback: (userInfo: { email?: string; id?: string }) => void) => void;
-        getRedirectURL: (path?: string) => string;
-        launchWebAuthFlow: (
-          details: { url: string; interactive: boolean },
-          callback: (responseUrl?: string) => void,
-        ) => void;
-      };
-      runtime?: {
-        lastError?: { message?: string };
-        sendMessage: (message: { type: string }) => void;
-      };
-      storage?: {
-        local?: {
-          get: (keys: string[]) => Promise<Record<string, unknown>>;
-          set: (items: Record<string, string>) => Promise<void>;
-        };
-      };
-    }
-  | undefined;
+} from './panel/api-extraction';
+import { CLOSE_HELLO_DOCK, PANEL_TO_HOST_SOURCE, type PanelToHostDockMessage } from './messages';
 
 function isAllowedAiiiEmail(email: string): boolean {
   const normalized = email.trim().toLowerCase();
-  if (!normalized.includes("@")) return false;
+  if (!normalized.includes('@')) return false;
   return normalized.endsWith(ALLOWED_GOOGLE_EMAIL_SUFFIX);
 }
 
 // ===== DOM 節點快取 =====
-const toastStatusEl = document.getElementById("toastStatus") as HTMLDivElement;
-const toggleChatButton = document.getElementById("toggleChat") as HTMLButtonElement;
-const chatPanelEl = document.getElementById("chatPanel") as HTMLDivElement;
-const chatMessagesEl = document.getElementById("chatMessages") as HTMLDivElement;
-const chatFormEl = document.getElementById("chatForm") as HTMLFormElement;
-const chatInputEl = document.getElementById("chatInput") as HTMLTextAreaElement;
-const sendMessageButton = document.getElementById("sendMessage") as HTMLButtonElement;
-const clearChatButton = document.getElementById("clearChat") as HTMLButtonElement;
-const authStatusEl = document.getElementById("authStatus") as HTMLParagraphElement;
-const authorizeGoogleButton = document.getElementById("authorizeGoogle") as HTMLButtonElement;
-const closeDockButton = document.getElementById("closeDock") as HTMLButtonElement;
-const oauthInfoEl = document.getElementById("oauthInfo") as HTMLPreElement;
-const toggleWorkflowsButton = document.getElementById("toggleWorkflows") as HTMLButtonElement;
-const workflowPanelEl = document.getElementById("workflowPanel") as HTMLDivElement;
-const toggleCurlParserButton = document.getElementById("toggleCurlParser") as HTMLButtonElement;
-const curlParserPanelEl = document.getElementById("curlParserPanel") as HTMLDivElement;
-const toggleManualApiButton = document.getElementById("toggleManualApi") as HTMLButtonElement;
-const manualApiPanelEl = document.getElementById("manualApiPanel") as HTMLDivElement;
-const apiCandidatesEl = document.getElementById("apiCandidates") as HTMLDivElement;
-const manualApiNameEl = document.getElementById("manualApiName") as HTMLInputElement;
-const manualApiPathEl = document.getElementById("manualApiPath") as HTMLInputElement;
-const manualApiPurposeEl = document.getElementById("manualApiPurpose") as HTMLInputElement;
-const manualApiCurlEl = document.getElementById("manualApiCurl") as HTMLTextAreaElement;
-const parseCurlButton = document.getElementById("parseCurl") as HTMLButtonElement;
-const manualApiMethodEl = document.getElementById("manualApiMethod") as HTMLSelectElement;
-const manualApiParamsRowsEl = document.getElementById("manualApiParamsRows") as HTMLDivElement;
-const addParamRowButton = document.getElementById("addParamRow") as HTMLButtonElement;
-const manualApiHeadersRowsEl = document.getElementById("manualApiHeadersRows") as HTMLDivElement;
-const addHeaderRowButton = document.getElementById("addHeaderRow") as HTMLButtonElement;
-const manualApiBodyEl = document.getElementById("manualApiBody") as HTMLTextAreaElement;
-const addManualApiButton = document.getElementById("addManualApi") as HTMLButtonElement;
-const manualApiActionsEl = document.getElementById("manualApiActions") as HTMLDivElement;
-const clearManualApiButton = document.getElementById("clearManualApi") as HTMLButtonElement;
-const apiDetailNameEl = document.getElementById("apiDetailName") as HTMLDivElement;
-const apiDetailPurposeEl = document.getElementById("apiDetailPurpose") as HTMLDivElement;
-const apiDetailParamsEl = document.getElementById("apiDetailParams") as HTMLDivElement;
-const cancelApiDetailButton = document.getElementById("cancelApiDetail") as HTMLButtonElement;
-const apiDetailActionsEl = document.getElementById("apiDetailActions") as HTMLDivElement;
-const addStepButton = document.getElementById("addStep") as HTMLButtonElement;
-const saveDetailApiButton = document.getElementById("saveDetailApi") as HTMLButtonElement;
-const updateDetailApiButton = document.getElementById("updateDetailApi") as HTMLButtonElement;
-const draftStepsEl = document.getElementById("draftSteps") as HTMLOListElement;
-const runWorkflowButton = document.getElementById("runWorkflow") as HTMLButtonElement;
-const saveWorkflowButton = document.getElementById("saveWorkflow") as HTMLButtonElement;
-const clearDraftButton = document.getElementById("clearDraft") as HTMLButtonElement;
-const draftWorkflowNameInputEl = document.getElementById("draftWorkflowName") as HTMLInputElement;
-const savedWorkflowsEl = document.getElementById("savedWorkflows") as HTMLDivElement;
-const toggleSavedApisButton = document.getElementById("toggleSavedApis") as HTMLButtonElement;
-const savedApisPanelEl = document.getElementById("savedApisPanel") as HTMLDivElement;
-const savedApisListEl = document.getElementById("savedApisList") as HTMLDivElement;
-const toggleSavedWorkflowsButton = document.getElementById("toggleSavedWorkflows") as HTMLButtonElement;
-const savedWorkflowsPanelEl = document.getElementById("savedWorkflowsPanel") as HTMLDivElement;
-const executionResultSectionEl = document.getElementById("executionResultSection") as HTMLDivElement;
-const toggleExecutionResultButton = document.getElementById("toggleExecutionResult") as HTMLButtonElement;
-const executionResultPanelEl = document.getElementById("executionResultPanel") as HTMLDivElement;
-const executionResultListEl = document.getElementById("executionResultList") as HTMLDivElement;
-const clearExecutionResultButton = document.getElementById("clearExecutionResult") as HTMLButtonElement;
-const panelBodyEl = document.querySelector(".panel-body") as HTMLDivElement | null;
-const exportDraftWorkflowJsonButton = document.getElementById("exportDraftWorkflowJson") as HTMLButtonElement;
-const copyDraftWorkflowJsonButton = document.getElementById("copyDraftWorkflowJson") as HTMLButtonElement;
-const importWorkflowJsonInputEl = document.getElementById("importWorkflowJsonInput") as HTMLTextAreaElement;
-const importWorkflowToDraftButton = document.getElementById("importWorkflowToDraft") as HTMLButtonElement;
+const toastStatusEl = document.getElementById('toastStatus') as HTMLDivElement;
+const toggleChatButton = document.getElementById('toggleChat') as HTMLButtonElement;
+const chatPanelEl = document.getElementById('chatPanel') as HTMLDivElement;
+const chatMessagesEl = document.getElementById('chatMessages') as HTMLDivElement;
+const chatFormEl = document.getElementById('chatForm') as HTMLFormElement;
+const chatInputEl = document.getElementById('chatInput') as HTMLTextAreaElement;
+const sendMessageButton = document.getElementById('sendMessage') as HTMLButtonElement;
+const clearChatButton = document.getElementById('clearChat') as HTMLButtonElement;
+const authStatusEl = document.getElementById('authStatus') as HTMLParagraphElement;
+const authorizeGoogleButton = document.getElementById('authorizeGoogle') as HTMLButtonElement;
+const closeDockButton = document.getElementById('closeDock') as HTMLButtonElement;
+const dockShellDragGripEl = document.getElementById('dockShellDragGrip') as HTMLButtonElement | null;
+const minimizeDockButton = document.getElementById('minimizeDock') as HTMLButtonElement;
+const openPanelSettingsButton = document.getElementById('openPanelSettings') as HTMLButtonElement;
+const panelSettingsOverlayEl = document.getElementById('panelSettingsOverlay') as HTMLDivElement;
+const closePanelSettingsButton = document.getElementById('closePanelSettings') as HTMLButtonElement;
+const oauthInfoEl = document.getElementById('oauthInfo') as HTMLPreElement;
+const toggleWorkflowsButton = document.getElementById('toggleWorkflows') as HTMLButtonElement;
+const workflowPanelEl = document.getElementById('workflowPanel') as HTMLDivElement;
+const toggleCurlParserButton = document.getElementById('toggleCurlParser') as HTMLButtonElement;
+const curlParserPanelEl = document.getElementById('curlParserPanel') as HTMLDivElement;
+const toggleManualApiButton = document.getElementById('toggleManualApi') as HTMLButtonElement;
+const manualApiPanelEl = document.getElementById('manualApiPanel') as HTMLDivElement;
+const apiCandidatesEl = document.getElementById('apiCandidates') as HTMLDivElement;
+const manualApiNameEl = document.getElementById('manualApiName') as HTMLInputElement;
+const manualApiPathEl = document.getElementById('manualApiPath') as HTMLInputElement;
+const manualApiPurposeEl = document.getElementById('manualApiPurpose') as HTMLInputElement;
+const manualApiCurlEl = document.getElementById('manualApiCurl') as HTMLTextAreaElement;
+const parseCurlButton = document.getElementById('parseCurl') as HTMLButtonElement;
+const manualApiMethodEl = document.getElementById('manualApiMethod') as HTMLSelectElement;
+const manualApiParamsRowsEl = document.getElementById('manualApiParamsRows') as HTMLDivElement;
+const addParamRowButton = document.getElementById('addParamRow') as HTMLButtonElement;
+const manualApiHeadersRowsEl = document.getElementById('manualApiHeadersRows') as HTMLDivElement;
+const addHeaderRowButton = document.getElementById('addHeaderRow') as HTMLButtonElement;
+const manualApiBodyEl = document.getElementById('manualApiBody') as HTMLTextAreaElement;
+const addManualApiButton = document.getElementById('addManualApi') as HTMLButtonElement;
+const manualApiActionsEl = document.getElementById('manualApiActions') as HTMLDivElement;
+const clearManualApiButton = document.getElementById('clearManualApi') as HTMLButtonElement;
+const apiDetailNameEl = document.getElementById('apiDetailName') as HTMLDivElement;
+const apiDetailPurposeEl = document.getElementById('apiDetailPurpose') as HTMLDivElement;
+const apiDetailParamsEl = document.getElementById('apiDetailParams') as HTMLDivElement;
+const cancelApiDetailButton = document.getElementById('cancelApiDetail') as HTMLButtonElement;
+const apiDetailActionsEl = document.getElementById('apiDetailActions') as HTMLDivElement;
+const addStepButton = document.getElementById('addStep') as HTMLButtonElement;
+const saveDetailApiButton = document.getElementById('saveDetailApi') as HTMLButtonElement;
+const updateDetailApiButton = document.getElementById('updateDetailApi') as HTMLButtonElement;
+const draftStepsEl = document.getElementById('draftSteps') as HTMLOListElement;
+const runWorkflowButton = document.getElementById('runWorkflow') as HTMLButtonElement;
+const saveWorkflowButton = document.getElementById('saveWorkflow') as HTMLButtonElement;
+const clearDraftButton = document.getElementById('clearDraft') as HTMLButtonElement;
+const draftWorkflowNameInputEl = document.getElementById('draftWorkflowName') as HTMLInputElement;
+const savedWorkflowsEl = document.getElementById('savedWorkflows') as HTMLDivElement;
+const toggleSavedApisButton = document.getElementById('toggleSavedApis') as HTMLButtonElement;
+const savedApisPanelEl = document.getElementById('savedApisPanel') as HTMLDivElement;
+const savedApisListEl = document.getElementById('savedApisList') as HTMLDivElement;
+const toggleSavedWorkflowsButton = document.getElementById('toggleSavedWorkflows') as HTMLButtonElement;
+const savedWorkflowsPanelEl = document.getElementById('savedWorkflowsPanel') as HTMLDivElement;
+const toggleExecutionResultButton = document.getElementById('toggleExecutionResult') as HTMLButtonElement;
+const executionResultPanelEl = document.getElementById('executionResultPanel') as HTMLDivElement;
+const executionResultListEl = document.getElementById('executionResultList') as HTMLDivElement;
+const clearExecutionResultButton = document.getElementById('clearExecutionResult') as HTMLButtonElement;
+const panelBodyEl = document.querySelector('.panel-body') as HTMLDivElement | null;
+const exportDraftWorkflowJsonButton = document.getElementById('exportDraftWorkflowJson') as HTMLButtonElement;
+const copyDraftWorkflowJsonButton = document.getElementById('copyDraftWorkflowJson') as HTMLButtonElement;
+const importWorkflowJsonInputEl = document.getElementById('importWorkflowJsonInput') as HTMLTextAreaElement;
+const importWorkflowToDraftButton = document.getElementById('importWorkflowToDraft') as HTMLButtonElement;
 let execResults: ExecResult[] = [];
 
 let messages: ChatMessage[] = [];
+/** 目前串流中的 assistant 訊息索引（`null` 表示未在串流） */
+let streamingAssistantIndex: number | null = null;
+/** 串流剛結束的訊息索引，用於短暫顯示「已回應完畢」樣式 */
+let streamJustFinishedIndex: number | null = null;
+let streamJustFinishedClearTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearStreamJustFinishedTimer(): void {
+  if (streamJustFinishedClearTimer !== null) {
+    clearTimeout(streamJustFinishedClearTimer);
+    streamJustFinishedClearTimer = null;
+  }
+}
+
+/** 在 loadMessages 從 storage 還原完成前為 false，避免 saveMessages 以空 messages 覆蓋既有紀錄（競態） */
+let persistenceReady = false;
 let isAuthorized = false;
-let firebaseIdToken = "";
-let googleAccessToken = "";
+let firebaseIdToken = '';
+let googleAccessToken = '';
 let authExpiresAt = 0;
-let accountEmail = "";
+let accountEmail = '';
 let chatSessionId: string = globalThis.crypto?.randomUUID?.() || `session-${Date.now()}`;
 let apiCandidates: ApiSpec[] = [];
 let customApiSpecs: ApiSpec[] = [];
@@ -154,11 +148,12 @@ let savedApisOpen = false;
 let editedDetailSpec: ApiSpec | null = null;
 let editingStepIndex = -1;
 let editingApiIndex = -1;
-let currentWorkflowName = "";
+let currentWorkflowName = '';
 /** 流程名稱欄是否由 JSON 匯入帶入（用於儲存時必填提示文案） */
 let draftNameFromImport = false;
 const fallbackStorage = new Map<string, string>();
-const extensionChrome = typeof chrome !== "undefined" ? chrome : undefined;
+/** `chrome` 全域型別由 `tsconfig` 的 `types: ["chrome"]`（@types/chrome）提供；非 extension 環境可為 `undefined`，此時走 fallback storage。 */
+const extensionChrome = typeof chrome !== 'undefined' ? chrome : undefined;
 
 // ===== 授權狀態與共用 UI 提示 =====
 function isAuthStateValid(state: AuthState): boolean {
@@ -167,7 +162,7 @@ function isAuthStateValid(state: AuthState): boolean {
     state.googleAccessToken &&
     state.expiresAt &&
     Number.isFinite(state.expiresAt) &&
-    Date.now() < state.expiresAt,
+    Date.now() < state.expiresAt
   );
 }
 
@@ -193,49 +188,49 @@ function canUseAuthenticatedFeatures(): boolean {
     firebaseIdToken &&
     authExpiresAt > 0 &&
     Date.now() < authExpiresAt &&
-    isAllowedAiiiEmail(accountEmail),
+    isAllowedAiiiEmail(accountEmail)
   );
 }
 
 /** 未通過授權時鎖定 panel-body 內互動（收合鈕除外），與 setChatEnabled 併用 */
 function syncPanelBodyAuthLock(): void {
   if (!panelBodyEl) return;
-  panelBodyEl.classList.toggle("panel-body--auth-locked", !canUseAuthenticatedFeatures());
+  panelBodyEl.classList.toggle('panel-body--auth-locked', !canUseAuthenticatedFeatures());
 }
 
 function clearAuthStateInMemory(): void {
   isAuthorized = false;
-  firebaseIdToken = "";
-  googleAccessToken = "";
+  firebaseIdToken = '';
+  googleAccessToken = '';
   authExpiresAt = 0;
-  accountEmail = "";
+  accountEmail = '';
   syncPanelBodyAuthLock();
 }
 
 function notifyAuthExpired(): void {
   clearAuthStateInMemory();
   setChatEnabled(false);
-  const msg = "授權已失效，請重新點擊「Google 授權」登入。";
-  setAuthStatus(msg, "error");
-  setToast(msg, "error", 5000);
-  authorizeGoogleButton.classList.add("auth-expired-pulse");
+  const msg = '授權已失效，請重新點擊「Google 授權」登入。';
+  setAuthStatus(msg, 'error');
+  setToast(msg, 'error', 5000);
+  authorizeGoogleButton.classList.add('auth-expired-pulse');
 }
 
-function setAuthStatus(text: string, status: "normal" | "ok" | "error" = "normal"): void {
+function setAuthStatus(text: string, status: 'normal' | 'ok' | 'error' = 'normal'): void {
   authStatusEl.textContent = text;
-  authStatusEl.classList.remove("ok", "error");
-  if (status !== "normal") authStatusEl.classList.add(status);
+  authStatusEl.classList.remove('ok', 'error');
+  if (status !== 'normal') authStatusEl.classList.add(status);
 }
 
 let toastTimer: ReturnType<typeof setTimeout> | null = null;
 function copyToClipboard(text: string, btn: HTMLButtonElement): void {
   const succeed = () => {
-    btn.textContent = "已複製 ✓";
+    btn.textContent = '已複製 ✓';
     setTimeout(() => {
-      btn.textContent = "複製";
+      btn.textContent = '複製';
     }, 1500);
   };
-  const fail = () => setToast("複製失敗，請手動選取文字。", "error");
+  const fail = () => setToast('複製失敗，請手動選取文字。', 'error');
 
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard
@@ -244,14 +239,14 @@ function copyToClipboard(text: string, btn: HTMLButtonElement): void {
       .catch(() => {
         // Fallback: execCommand
         try {
-          const ta = document.createElement("textarea");
+          const ta = document.createElement('textarea');
           ta.value = text;
-          ta.style.position = "fixed";
-          ta.style.opacity = "0";
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
           document.body.appendChild(ta);
           ta.focus();
           ta.select();
-          const ok = document.execCommand("copy");
+          const ok = document.execCommand('copy');
           document.body.removeChild(ta);
           ok ? succeed() : fail();
         } catch {
@@ -260,14 +255,14 @@ function copyToClipboard(text: string, btn: HTMLButtonElement): void {
       });
   } else {
     try {
-      const ta = document.createElement("textarea");
+      const ta = document.createElement('textarea');
       ta.value = text;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
       document.body.appendChild(ta);
       ta.focus();
       ta.select();
-      const ok = document.execCommand("copy");
+      const ok = document.execCommand('copy');
       document.body.removeChild(ta);
       ok ? succeed() : fail();
     } catch {
@@ -276,20 +271,42 @@ function copyToClipboard(text: string, btn: HTMLButtonElement): void {
   }
 }
 
-function setToast(text: string, status: "normal" | "ok" | "error" = "normal", autoDismissMs = 4000): void {
+function setToast(text: string, status: 'normal' | 'ok' | 'error' = 'normal', autoDismissMs = 4000): void {
   if (toastTimer) {
     clearTimeout(toastTimer);
     toastTimer = null;
   }
   toastStatusEl.textContent = text;
-  toastStatusEl.classList.remove("ok", "error", "hidden");
-  if (status !== "normal") toastStatusEl.classList.add(status);
+  toastStatusEl.classList.remove('ok', 'error', 'hidden');
+  if (status !== 'normal') toastStatusEl.classList.add(status);
   if (autoDismissMs > 0) {
     toastTimer = setTimeout(() => {
-      toastStatusEl.classList.add("hidden");
+      toastStatusEl.classList.add('hidden');
       toastTimer = null;
     }, autoDismissMs);
   }
+}
+
+/** 對話氣泡內 ``` 區塊的「複製」按鈕（事件委派，只綁一次） */
+function bindChatMarkdownCopyOnce(): void {
+  const g = globalThis as { __personalExtMdCopy?: boolean };
+  if (g.__personalExtMdCopy) return;
+  g.__personalExtMdCopy = true;
+  chatMessagesEl.addEventListener('click', (ev) => {
+    const btn = (ev.target as HTMLElement).closest('button.md-code-copy');
+    if (!btn || !chatMessagesEl.contains(btn)) return;
+    const id = btn.getAttribute('data-copy');
+    const el = id ? document.getElementById(id) : null;
+    const txt = el?.textContent ?? '';
+    if (!txt.trim()) {
+      setToast('此區塊沒有可複製文字', 'error');
+      return;
+    }
+    void navigator.clipboard.writeText(txt).then(
+      () => setToast('已複製到剪貼簿', 'ok', 2200),
+      () => setToast('複製失敗，請手動選取內容', 'error')
+    );
+  });
 }
 
 function setOAuthInfo(text: string): void {
@@ -297,47 +314,49 @@ function setOAuthInfo(text: string): void {
 }
 
 function updateWorkflowToggleLabel(): void {
-  toggleWorkflowsButton.textContent = workflowPanelOpen ? "常用工作流程 ▾" : "常用工作流程 ▸";
+  toggleWorkflowsButton.textContent = workflowPanelOpen ? '常用工作流程 ▾' : '常用工作流程 ▸';
 }
 
 function setCurlParserOpen(open: boolean): void {
   curlParserOpen = open;
-  curlParserPanelEl.classList.toggle("collapsed", !open);
-  toggleCurlParserButton.textContent = open ? "解析 Curl ▾" : "解析 Curl ▸";
+  curlParserPanelEl.classList.toggle('collapsed', !open);
+  toggleCurlParserButton.textContent = open ? '解析 Curl ▾' : '解析 Curl ▸';
 }
 function setManualApiOpen(open: boolean): void {
   manualApiOpen = open;
-  manualApiPanelEl.classList.toggle("collapsed", !open);
-  toggleManualApiButton.textContent = open ? "自訂 API ▾" : "自訂 API ▸";
+  manualApiPanelEl.classList.toggle('collapsed', !open);
+  toggleManualApiButton.textContent = open ? '自訂 API ▾' : '自訂 API ▸';
 }
 function setSavedWorkflowsOpen(open: boolean): void {
   savedWorkflowsOpen = open;
-  savedWorkflowsPanelEl.classList.toggle("collapsed", !open);
-  toggleSavedWorkflowsButton.textContent = open ? "已儲存流程 ▾" : "已儲存流程 ▸";
+  savedWorkflowsPanelEl.classList.toggle('collapsed', !open);
+  toggleSavedWorkflowsButton.textContent = open ? '已儲存流程 ▾' : '已儲存流程 ▸';
 }
 function setSavedApisOpen(open: boolean): void {
   savedApisOpen = open;
-  savedApisPanelEl.classList.toggle("collapsed", !open);
-  toggleSavedApisButton.textContent = open ? "已儲存的 API ▾" : "已儲存的 API ▸";
+  savedApisPanelEl.classList.toggle('collapsed', !open);
+  toggleSavedApisButton.textContent = open ? '已儲存的 API ▾' : '已儲存的 API ▸';
 }
 function setChatPanelOpen(open: boolean): void {
   chatPanelOpen = open;
-  chatPanelEl.classList.toggle("collapsed", !open);
-  toggleChatButton.textContent = open ? "AI 小幫手 ▾" : "AI 小幫手 ▸";
+  chatPanelEl.classList.toggle('collapsed', !open);
+  toggleChatButton.textContent = open ? 'AI 小幫手 ▾' : 'AI 小幫手 ▸';
+  chatPanelEl.closest('section.chat-section')?.classList.toggle('is-section-collapsed', !open);
 }
 
 function setWorkflowPanelOpen(open: boolean): void {
   workflowPanelOpen = open;
-  workflowPanelEl.classList.toggle("collapsed", !open);
+  workflowPanelEl.classList.toggle('collapsed', !open);
   updateWorkflowToggleLabel();
+  workflowPanelEl.closest('section.workflow-section')?.classList.toggle('is-section-collapsed', !open);
 }
 
 function setChatEnabled(enabled: boolean): void {
   chatInputEl.disabled = !enabled;
   sendMessageButton.disabled = !enabled;
   chatInputEl.placeholder = enabled
-    ? "例如：業務離職了，我要移除他的 sales 與 lineUser 身份"
-    : "請先完成 Google 授權後，才可使用對話窗";
+    ? '例如：業務離職了，我要移除他的 sales 與 lineUser 身份'
+    : '請先完成 Google 授權後，才可使用對話窗';
   syncPanelBodyAuthLock();
 }
 
@@ -351,47 +370,76 @@ function buildMessageWithSkillDirective(rawMessage: string, useSkill: boolean): 
 若無合適 skill，請明確說明「本次不使用 skill」並直接給一般回答。`;
 }
 
-function maskBearerToken(token: string): string {
-  return maskToken(token.replace(/^Bearer\s+/i, "").trim());
+function _maskBearerToken(token: string): string {
+  return maskToken(token.replace(/^Bearer\s+/i, '').trim());
 }
 
-const HEADER_KEY_CUSTOM = "__custom__";
+const HEADER_KEY_CUSTOM = '__custom__';
 const HEADER_KEY_PRESETS = [
-  "Authorization",
-  "Content-Type",
-  "Accept",
-  "Accept-Language",
-  "x-api-key",
-  "X-API-Key",
-  "User-Agent",
-  "X-Request-Id",
-  "Cookie",
+  'Authorization',
+  'Content-Type',
+  'Accept',
+  'Accept-Language',
+  'x-api-key',
+  'X-API-Key',
+  'User-Agent',
+  'X-Request-Id',
+  'Cookie',
 ];
 
-function maskSensitiveHeaderValue(key: string, value: string): string {
+/** 手動 API「請求名稱」：類識別字（英文或底線開頭，僅字母、數字、底線） */
+const MANUAL_API_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+/** Query／JSON 參數鍵名 */
+const MANUAL_API_PARAM_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+/** HTTP header 欄位名（RFC 9110 `tchar`） */
+const MANUAL_HTTP_HEADER_NAME_RE = /^[-0-9A-Za-z!#$%&'*+.^_`|~]+$/;
+
+function isManualApiPathWellFormed(path: string): boolean {
+  const t = path.trim();
+  if (!t) return false;
+  try {
+    const u = new URL(t);
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function isManualApiBodyWellFormed(body: string): boolean {
+  const t = body.trim();
+  if (!t) return true;
+  try {
+    JSON.parse(body);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function _maskSensitiveHeaderValue(key: string, value: string): string {
   const k = key.toLowerCase();
-  const raw = value.replace(/^Bearer\s+/i, "").trim();
-  if (k === "authorization" || k === "x-api-key" || k.endsWith("api-key")) return maskToken(raw);
+  const raw = value.replace(/^Bearer\s+/i, '').trim();
+  if (k === 'authorization' || k === 'x-api-key' || k.endsWith('api-key')) return maskToken(raw);
   if (raw.length > 32) return maskToken(raw);
   return value;
 }
 
 function buildHeaderKeySelect(selectedKey: string): HTMLSelectElement {
-  const select = document.createElement("select");
-  select.className = "header-key-select";
-  const empty = document.createElement("option");
-  empty.value = "";
-  empty.textContent = "選擇 Key";
+  const select = document.createElement('select');
+  select.className = 'header-key-select';
+  const empty = document.createElement('option');
+  empty.value = '';
+  empty.textContent = '選擇 Key';
   select.appendChild(empty);
   HEADER_KEY_PRESETS.forEach((preset) => {
-    const opt = document.createElement("option");
+    const opt = document.createElement('option');
     opt.value = preset;
     opt.textContent = preset;
     select.appendChild(opt);
   });
-  const customOpt = document.createElement("option");
+  const customOpt = document.createElement('option');
   customOpt.value = HEADER_KEY_CUSTOM;
-  customOpt.textContent = "自訂…";
+  customOpt.textContent = '自訂…';
   select.appendChild(customOpt);
   if (selectedKey && HEADER_KEY_PRESETS.includes(selectedKey)) {
     select.value = selectedKey;
@@ -402,42 +450,42 @@ function buildHeaderKeySelect(selectedKey: string): HTMLSelectElement {
 }
 
 function syncHeaderRowCustomVisibility(row: HTMLDivElement): void {
-  const select = row.querySelector(".header-key-select") as HTMLSelectElement;
-  const custom = row.querySelector(".header-key-custom") as HTMLInputElement;
+  const select = row.querySelector('.header-key-select') as HTMLSelectElement;
+  const custom = row.querySelector('.header-key-custom') as HTMLInputElement;
   if (!select || !custom) return;
   const isCustom = select.value === HEADER_KEY_CUSTOM;
-  custom.classList.toggle("visible", isCustom);
-  if (!isCustom) custom.value = "";
+  custom.classList.toggle('visible', isCustom);
+  if (!isCustom) custom.value = '';
 }
 
-function appendManualHeaderRow(key = "", value = ""): void {
-  const row = document.createElement("div");
-  row.className = "header-row";
-  const wrap = document.createElement("div");
-  wrap.className = "header-key-wrap";
+function appendManualHeaderRow(key = '', value = ''): void {
+  const row = document.createElement('div');
+  row.className = 'header-row';
+  const wrap = document.createElement('div');
+  wrap.className = 'header-key-wrap';
   const select = buildHeaderKeySelect(key);
-  const customKey = document.createElement("input");
-  customKey.type = "text";
-  customKey.className = "header-key-custom";
-  customKey.placeholder = "自訂 Key";
+  const customKey = document.createElement('input');
+  customKey.type = 'text';
+  customKey.className = 'header-key-custom';
+  customKey.placeholder = '自訂 Key';
   if (key && !HEADER_KEY_PRESETS.includes(key)) {
     customKey.value = key;
-    customKey.classList.add("visible");
+    customKey.classList.add('visible');
   }
-  const valInput = document.createElement("input");
-  valInput.type = "text";
-  valInput.className = "header-value";
-  valInput.placeholder = "Value";
+  const valInput = document.createElement('input');
+  valInput.type = 'text';
+  valInput.className = 'header-value';
+  valInput.placeholder = 'Value';
   valInput.value = value;
-  const removeBtn = document.createElement("button");
-  removeBtn.type = "button";
-  removeBtn.className = "header-remove";
-  removeBtn.textContent = "移除";
-  removeBtn.addEventListener("click", () => {
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'header-remove';
+  removeBtn.textContent = '移除';
+  removeBtn.addEventListener('click', () => {
     row.remove();
-    if (!manualApiHeadersRowsEl.querySelector(".header-row")) appendManualHeaderRow();
+    if (!manualApiHeadersRowsEl.querySelector('.header-row')) appendManualHeaderRow();
   });
-  select.addEventListener("change", () => {
+  select.addEventListener('change', () => {
     syncHeaderRowCustomVisibility(row);
   });
   wrap.appendChild(select);
@@ -461,13 +509,13 @@ function renderManualHeaderRowsFromObject(headers: Record<string, string>): void
 
 function collectManualHeaders(): Record<string, string> {
   const out: Record<string, string> = {};
-  manualApiHeadersRowsEl.querySelectorAll(".header-row").forEach((node) => {
+  manualApiHeadersRowsEl.querySelectorAll('.header-row').forEach((node) => {
     const row = node as HTMLDivElement;
-    const select = row.querySelector(".header-key-select") as HTMLSelectElement;
-    const custom = row.querySelector(".header-key-custom") as HTMLInputElement;
-    const valInput = row.querySelector(".header-value") as HTMLInputElement;
+    const select = row.querySelector('.header-key-select') as HTMLSelectElement;
+    const custom = row.querySelector('.header-key-custom') as HTMLInputElement;
+    const valInput = row.querySelector('.header-value') as HTMLInputElement;
     if (!select || !valInput) return;
-    let key = "";
+    let key = '';
     if (select.value === HEADER_KEY_CUSTOM) key = custom.value.trim();
     else key = select.value.trim();
     const val = valInput.value.trim();
@@ -476,26 +524,26 @@ function collectManualHeaders(): Record<string, string> {
   return out;
 }
 
-function appendManualParamRow(key = "", value = ""): void {
-  const row = document.createElement("div");
-  row.className = "header-row";
-  const keyInput = document.createElement("input");
-  keyInput.type = "text";
-  keyInput.className = "header-value";
-  keyInput.placeholder = "Param key";
+function appendManualParamRow(key = '', value = ''): void {
+  const row = document.createElement('div');
+  row.className = 'header-row';
+  const keyInput = document.createElement('input');
+  keyInput.type = 'text';
+  keyInput.className = 'header-value';
+  keyInput.placeholder = 'Param key';
   keyInput.value = key;
-  const valInput = document.createElement("input");
-  valInput.type = "text";
-  valInput.className = "header-value";
-  valInput.placeholder = "Value（可空）";
+  const valInput = document.createElement('input');
+  valInput.type = 'text';
+  valInput.className = 'header-value';
+  valInput.placeholder = 'Value（可空）';
   valInput.value = value;
-  const removeBtn = document.createElement("button");
-  removeBtn.type = "button";
-  removeBtn.className = "header-remove";
-  removeBtn.textContent = "移除";
-  removeBtn.addEventListener("click", () => {
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'header-remove';
+  removeBtn.textContent = '移除';
+  removeBtn.addEventListener('click', () => {
     row.remove();
-    if (!manualApiParamsRowsEl.querySelector(".header-row")) appendManualParamRow();
+    if (!manualApiParamsRowsEl.querySelector('.header-row')) appendManualParamRow();
   });
   row.appendChild(keyInput);
   row.appendChild(valInput);
@@ -515,10 +563,10 @@ function renderManualParamsRows(params: Array<{ key: string; value: string }>): 
 
 function collectManualParams(): string[] {
   const keys: string[] = [];
-  manualApiParamsRowsEl.querySelectorAll(".header-row").forEach((node) => {
+  manualApiParamsRowsEl.querySelectorAll('.header-row').forEach((node) => {
     const row = node as HTMLDivElement;
-    const inputs = row.querySelectorAll("input");
-    const key = (inputs[0] as HTMLInputElement | undefined)?.value.trim() ?? "";
+    const inputs = row.querySelectorAll('input');
+    const key = (inputs[0] as HTMLInputElement | undefined)?.value.trim() ?? '';
     if (key) keys.push(key);
   });
   return Array.from(new Set(keys));
@@ -528,11 +576,11 @@ function getAllApiCandidates(): ApiSpec[] {
   return [...apiCandidates];
 }
 
-function findSavedApiIndex(spec: ApiSpec | null): number {
+function _findSavedApiIndex(spec: ApiSpec | null): number {
   if (!spec) return -1;
-  const key = (spec.path || spec.api || "").trim();
+  const key = (spec.path || spec.api || '').trim();
   if (!key) return -1;
-  return customApiSpecs.findIndex((c) => (c.path || c.api || "").trim() === key);
+  return customApiSpecs.findIndex((c) => (c.path || c.api || '').trim() === key);
 }
 
 function refreshApiDetailActions(spec: ApiSpec | null): void {
@@ -541,23 +589,23 @@ function refreshApiDetailActions(spec: ApiSpec | null): void {
   addStepButton.disabled = !hasSpec;
   saveDetailApiButton.disabled = !hasSpec;
   updateDetailApiButton.disabled = !hasSpec || savedIndex < 0;
-  updateDetailApiButton.style.display = savedIndex >= 0 ? "block" : "none";
-  apiDetailActionsEl.classList.toggle("hidden", !hasSpec);
+  updateDetailApiButton.style.display = savedIndex >= 0 ? 'block' : 'none';
+  apiDetailActionsEl.classList.toggle('hidden', !hasSpec);
 }
 
 // ===== API 設定區渲染與互動 =====
 function buildDetailSection(label: string, defaultOpen: boolean): { wrap: HTMLDivElement; body: HTMLDivElement } {
-  const wrap = document.createElement("div");
-  wrap.className = "detail-section";
-  const toggle = document.createElement("button");
-  toggle.type = "button";
-  toggle.className = "detail-section-toggle";
-  toggle.textContent = `${defaultOpen ? "▾" : "▸"} ${label}`;
-  const body = document.createElement("div");
-  body.className = "detail-section-body" + (defaultOpen ? "" : " collapsed");
-  toggle.addEventListener("click", () => {
-    const isCollapsed = body.classList.toggle("collapsed");
-    toggle.textContent = `${isCollapsed ? "▸" : "▾"} ${label}`;
+  const wrap = document.createElement('div');
+  wrap.className = 'detail-section';
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'detail-section-toggle';
+  toggle.textContent = `${defaultOpen ? '▾' : '▸'} ${label}`;
+  const body = document.createElement('div');
+  body.className = 'detail-section-body' + (defaultOpen ? '' : ' collapsed');
+  toggle.addEventListener('click', () => {
+    const isCollapsed = body.classList.toggle('collapsed');
+    toggle.textContent = `${isCollapsed ? '▸' : '▾'} ${label}`;
   });
   wrap.appendChild(toggle);
   wrap.appendChild(body);
@@ -565,11 +613,11 @@ function buildDetailSection(label: string, defaultOpen: boolean): { wrap: HTMLDi
 }
 
 function resetApiDetail(): void {
-  apiDetailNameEl.textContent = "尚未選擇 API";
+  apiDetailNameEl.textContent = '尚未選擇 API';
   apiDetailPurposeEl.replaceChildren();
   apiDetailParamsEl.replaceChildren();
-  addStepButton.textContent = "加入流程步驟";
-  addStepButton.classList.remove("updating");
+  addStepButton.textContent = '加入流程步驟';
+  addStepButton.classList.remove('updating');
   editedDetailSpec = null;
   editingStepIndex = -1;
   refreshApiDetailActions(null);
@@ -587,43 +635,43 @@ function renderApiDetail(spec: ApiSpec | null): void {
   apiDetailNameEl.textContent = spec.requestName ?? spec.api;
 
   apiDetailPurposeEl.replaceChildren();
-  const nameWrap = document.createElement("div");
-  nameWrap.className = "api-detail-purpose-edit";
-  const nameLabel = document.createElement("label");
-  nameLabel.className = "api-detail-purpose-label";
-  nameLabel.setAttribute("for", "apiDetailNameInput");
-  nameLabel.textContent = "API 名稱";
-  const nameInput = document.createElement("input");
-  nameInput.id = "apiDetailNameInput";
-  nameInput.type = "text";
-  nameInput.className = "api-detail-purpose-input";
-  nameInput.placeholder = "顯示名稱（例如：MedSalesRollbackRequest）";
-  nameInput.value = (spec.requestName ?? spec.api ?? "").trim();
-  nameInput.autocomplete = "off";
-  nameInput.addEventListener("input", () => {
+  const nameWrap = document.createElement('div');
+  nameWrap.className = 'api-detail-purpose-edit';
+  const nameLabel = document.createElement('label');
+  nameLabel.className = 'api-detail-purpose-label';
+  nameLabel.setAttribute('for', 'apiDetailNameInput');
+  nameLabel.textContent = 'API 名稱';
+  const nameInput = document.createElement('input');
+  nameInput.id = 'apiDetailNameInput';
+  nameInput.type = 'text';
+  nameInput.className = 'api-detail-purpose-input';
+  nameInput.placeholder = '顯示名稱（例如：MedSalesRollbackRequest）';
+  nameInput.value = (spec.requestName ?? spec.api ?? '').trim();
+  nameInput.autocomplete = 'off';
+  nameInput.addEventListener('input', () => {
     if (!editedDetailSpec) return;
     const nextName = nameInput.value.trim();
     editedDetailSpec.requestName = nextName || undefined;
-    apiDetailNameEl.textContent = nextName || editedDetailSpec.api || "尚未命名 API";
+    apiDetailNameEl.textContent = nextName || editedDetailSpec.api || '尚未命名 API';
   });
   nameWrap.appendChild(nameLabel);
   nameWrap.appendChild(nameInput);
   apiDetailPurposeEl.appendChild(nameWrap);
 
-  const purposeWrap = document.createElement("div");
-  purposeWrap.className = "api-detail-purpose-edit";
-  const purposeLabel = document.createElement("label");
-  purposeLabel.className = "api-detail-purpose-label";
-  purposeLabel.setAttribute("for", "apiDetailPurposeInput");
-  purposeLabel.textContent = "用途";
-  const purposeInput = document.createElement("input");
-  purposeInput.id = "apiDetailPurposeInput";
-  purposeInput.type = "text";
-  purposeInput.className = "api-detail-purpose-input";
-  purposeInput.placeholder = "簡短說明此 API 的用途（可選）";
-  purposeInput.value = (spec.purpose ?? "").trim();
-  purposeInput.autocomplete = "off";
-  purposeInput.addEventListener("input", () => {
+  const purposeWrap = document.createElement('div');
+  purposeWrap.className = 'api-detail-purpose-edit';
+  const purposeLabel = document.createElement('label');
+  purposeLabel.className = 'api-detail-purpose-label';
+  purposeLabel.setAttribute('for', 'apiDetailPurposeInput');
+  purposeLabel.textContent = '用途';
+  const purposeInput = document.createElement('input');
+  purposeInput.id = 'apiDetailPurposeInput';
+  purposeInput.type = 'text';
+  purposeInput.className = 'api-detail-purpose-input';
+  purposeInput.placeholder = '簡短說明此 API 的用途（可選）';
+  purposeInput.value = (spec.purpose ?? '').trim();
+  purposeInput.autocomplete = 'off';
+  purposeInput.addEventListener('input', () => {
     if (editedDetailSpec) editedDetailSpec.purpose = purposeInput.value;
   });
   purposeWrap.appendChild(purposeLabel);
@@ -632,128 +680,226 @@ function renderApiDetail(spec: ApiSpec | null): void {
 
   const container = document.createDocumentFragment();
 
-  // URL (read-only display, updated when params change)
-  const urlCode = document.createElement("code");
-  urlCode.className = "detail-url-code";
-  urlCode.textContent = `${spec.method ?? "GET"} ${spec.path ?? spec.api ?? "-"}`;
-  container.appendChild(urlCode);
+  const requestCard = document.createElement('div');
+  requestCard.className = 'api-detail-request-card';
+  const rqTitle = document.createElement('div');
+  rqTitle.className = 'api-detail-request-title';
+  rqTitle.textContent = '連線與端點';
+  requestCard.appendChild(rqTitle);
+
+  const initialTarget = (spec.path ?? spec.api ?? '').trim();
+  const pathSplit = splitRequestTargetForEditor(initialTarget);
+
+  const methodRow = document.createElement('div');
+  methodRow.className = 'api-detail-request-row';
+  const methodLabel = document.createElement('label');
+  methodLabel.className = 'api-detail-purpose-label';
+  methodLabel.setAttribute('for', 'apiDetailMethodSelect');
+  methodLabel.textContent = 'HTTP 方法';
+  const methodSelect = document.createElement('select');
+  methodSelect.id = 'apiDetailMethodSelect';
+  methodSelect.className = 'api-detail-method-select';
+  const allowedMethods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+  const methodUpper = ((spec.method || 'GET') as string).toUpperCase();
+  allowedMethods.forEach((m) => {
+    const o = document.createElement('option');
+    o.value = m;
+    o.textContent = m;
+    methodSelect.appendChild(o);
+  });
+  if (!allowedMethods.includes(methodUpper)) {
+    const o = document.createElement('option');
+    o.value = methodUpper;
+    o.textContent = methodUpper;
+    methodSelect.appendChild(o);
+  }
+  methodSelect.value = methodUpper;
+  methodRow.appendChild(methodLabel);
+  methodRow.appendChild(methodSelect);
+  requestCard.appendChild(methodRow);
+
+  const baseRow = document.createElement('div');
+  baseRow.className = 'api-detail-request-row';
+  const baseLabel = document.createElement('label');
+  baseLabel.className = 'api-detail-purpose-label';
+  baseLabel.setAttribute('for', 'apiDetailBaseUrlInput');
+  baseLabel.textContent = '網域／基底 URL';
+  const baseInput = document.createElement('input');
+  baseInput.id = 'apiDetailBaseUrlInput';
+  baseInput.type = 'text';
+  baseInput.className = 'api-detail-purpose-input';
+  baseInput.placeholder = 'https://api.example.com（相對路徑可留空）';
+  baseInput.value = pathSplit.base;
+  baseInput.autocomplete = 'off';
+  baseRow.appendChild(baseLabel);
+  baseRow.appendChild(baseInput);
+  requestCard.appendChild(baseRow);
+
+  const pathRow = document.createElement('div');
+  pathRow.className = 'api-detail-request-row';
+  const pathLabel = document.createElement('label');
+  pathLabel.className = 'api-detail-purpose-label';
+  pathLabel.setAttribute('for', 'apiDetailPathInput');
+  pathLabel.textContent = '路徑與查詢';
+  const pathInput = document.createElement('input');
+  pathInput.id = 'apiDetailPathInput';
+  pathInput.type = 'text';
+  pathInput.className = 'api-detail-purpose-input';
+  pathInput.placeholder = '例如 /v1/foo、siteId/med-sales 或 ?a=1&b=2';
+  pathInput.value = pathSplit.pathAndQuery;
+  pathInput.autocomplete = 'off';
+  pathRow.appendChild(pathLabel);
+  pathRow.appendChild(pathInput);
+  requestCard.appendChild(pathRow);
+
+  const urlCode = document.createElement('code');
+  urlCode.className = 'detail-url-code detail-url-code--preview';
+
+  const refreshRequestPreview = (): void => {
+    if (!editedDetailSpec) return;
+    editedDetailSpec.method = methodSelect.value;
+    const joined = joinRequestTargetFromEditor(baseInput.value, pathInput.value);
+    editedDetailSpec.path = joined;
+    urlCode.textContent = `${(methodSelect.value || 'GET').toUpperCase()} ${joined || '-'}`;
+  };
+  methodSelect.addEventListener('change', refreshRequestPreview);
+  baseInput.addEventListener('input', refreshRequestPreview);
+  pathInput.addEventListener('input', refreshRequestPreview);
+  refreshRequestPreview();
+
+  const previewLabel = document.createElement('div');
+  previewLabel.className = 'api-detail-preview-label';
+  previewLabel.textContent = '實際請求（預覽）';
+  requestCard.appendChild(previewLabel);
+  requestCard.appendChild(urlCode);
+  container.appendChild(requestCard);
 
   // ── Params ──
   const urlParamObj: Record<string, string> = {};
   try {
-    const qIdx = (spec.path ?? spec.api ?? "").indexOf("?");
-    if (qIdx >= 0)
-      new URLSearchParams((spec.path ?? spec.api ?? "").slice(qIdx + 1)).forEach((v, k) => {
-        urlParamObj[k] = v;
-      });
+    const { queryString: initialQs } = getPathNoQueryAndSearchFromCombined(initialTarget);
+    new URLSearchParams(initialQs).forEach((v, k) => {
+      if (k) urlParamObj[k] = v;
+    });
   } catch {
     /**/
   }
   const urlParamKeys = [...new Set(Object.keys(urlParamObj))];
 
   const urlParamsSec = buildDetailSection(`Params（URL 查詢參數，${urlParamKeys.length} 個）`, true);
-  const urlParamsList = document.createElement("div");
-  urlParamsList.className = "detail-edit-list";
+  const urlParamsList = document.createElement('div');
+  urlParamsList.className = 'detail-edit-list';
 
   const rebuildUrlParams = () => {
     if (!editedDetailSpec) return;
     try {
-      const base = (editedDetailSpec.path ?? editedDetailSpec.api ?? "").split("?")[0];
+      const combined = (editedDetailSpec.path ?? editedDetailSpec.api ?? '').trim();
+      const { pathNoQuery, queryString } = getPathNoQueryAndSearchFromCombined(combined);
       const collected: Record<string, string> = {};
-      urlParamsList.querySelectorAll<HTMLDivElement>(".detail-edit-row").forEach((r) => {
-        const key = (r.querySelector(".detail-edit-key-input") as HTMLInputElement)?.value.trim() ?? "";
-        const val = (r.querySelector(".detail-edit-val-input") as HTMLInputElement)?.value ?? "";
+      try {
+        new URLSearchParams(queryString).forEach((v, k) => {
+          if (k) collected[k] = v;
+        });
+      } catch {
+        /**/
+      }
+      urlParamsList.querySelectorAll<HTMLDivElement>('.detail-edit-row').forEach((r) => {
+        const key = (r.querySelector('.detail-edit-key-input') as HTMLInputElement)?.value.trim() ?? '';
+        const val = (r.querySelector('.detail-edit-val-input') as HTMLInputElement)?.value ?? '';
         if (key && val) collected[key] = val;
       });
       const qs = new URLSearchParams(collected).toString();
-      const newPath = qs ? `${base}?${qs}` : base;
+      const newPath = qs ? `${pathNoQuery}?${qs}` : pathNoQuery;
       editedDetailSpec.path = newPath;
       editedDetailSpec.params = Array.from(new Set([...(editedDetailSpec.params ?? []), ...Object.keys(collected)]));
-      urlCode.textContent = `${editedDetailSpec.method ?? "GET"} ${newPath}`;
+      urlCode.textContent = `${(methodSelect.value || editedDetailSpec.method || 'GET').toString().toUpperCase()} ${newPath}`;
+      const sp = splitRequestTargetForEditor(newPath);
+      baseInput.value = sp.base;
+      pathInput.value = sp.pathAndQuery;
     } catch {
       // ignore parse/update errors for incomplete editing state
     }
   };
 
   const addEditableUrlParamRow = (key: string, value: string) => {
-    const row = document.createElement("div");
-    row.className = "detail-edit-row";
-    const keyInput = document.createElement("input");
-    keyInput.type = "text";
-    keyInput.className = "detail-edit-key-input detail-edit-input";
+    const row = document.createElement('div');
+    row.className = 'detail-edit-row';
+    const keyInput = document.createElement('input');
+    keyInput.type = 'text';
+    keyInput.className = 'detail-edit-key-input detail-edit-input';
     keyInput.value = key;
-    keyInput.placeholder = "Param key";
-    const valInput = document.createElement("input");
-    valInput.type = "text";
-    valInput.className = "detail-edit-val-input detail-edit-input";
+    keyInput.placeholder = 'Param key';
+    const valInput = document.createElement('input');
+    valInput.type = 'text';
+    valInput.className = 'detail-edit-val-input detail-edit-input';
     valInput.value = value;
-    valInput.placeholder = "value";
-    const removeBtn = document.createElement("button");
-    removeBtn.type = "button";
-    removeBtn.className = "header-remove";
-    removeBtn.textContent = "✕";
-    removeBtn.addEventListener("click", () => {
+    valInput.placeholder = 'value';
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'header-remove';
+    removeBtn.textContent = '✕';
+    removeBtn.addEventListener('click', () => {
       row.remove();
       rebuildUrlParams();
     });
-    keyInput.addEventListener("input", rebuildUrlParams);
-    valInput.addEventListener("input", rebuildUrlParams);
+    keyInput.addEventListener('input', rebuildUrlParams);
+    valInput.addEventListener('input', rebuildUrlParams);
     row.appendChild(keyInput);
     row.appendChild(valInput);
     row.appendChild(removeBtn);
     urlParamsList.appendChild(row);
   };
 
-  urlParamKeys.forEach((key) => addEditableUrlParamRow(key, urlParamObj[key] ?? ""));
-  const addParamBtn = document.createElement("button");
-  addParamBtn.type = "button";
-  addParamBtn.className = "detail-add-row-btn";
-  addParamBtn.textContent = "＋ 新增 Param";
-  addParamBtn.addEventListener("click", () => addEditableUrlParamRow("", ""));
+  urlParamKeys.forEach((key) => addEditableUrlParamRow(key, urlParamObj[key] ?? ''));
+  const addParamBtn = document.createElement('button');
+  addParamBtn.type = 'button';
+  addParamBtn.className = 'detail-add-row-btn';
+  addParamBtn.textContent = '＋ 新增 Param';
+  addParamBtn.addEventListener('click', () => addEditableUrlParamRow('', ''));
   urlParamsSec.body.appendChild(urlParamsList);
   urlParamsSec.body.appendChild(addParamBtn);
   container.appendChild(urlParamsSec.wrap);
 
   // ── Headers ──
-  const visibleHeaders = Object.entries(spec.headers ?? {}).filter(([k]) => k.toLowerCase() !== "authorization");
+  const visibleHeaders = Object.entries(spec.headers ?? {}).filter(([k]) => k.toLowerCase() !== 'authorization');
   const headerSec = buildDetailSection(`Headers（${visibleHeaders.length} 個）`, visibleHeaders.length > 0);
-  const headerList = document.createElement("div");
-  headerList.className = "detail-edit-list";
+  const headerList = document.createElement('div');
+  headerList.className = 'detail-edit-list';
 
   const rebuildEditedHeaders = () => {
     if (!editedDetailSpec) return;
     const obj: Record<string, string> = {};
-    headerList.querySelectorAll<HTMLDivElement>(".detail-edit-row").forEach((r) => {
-      const k = (r.querySelector(".detail-edit-key-input") as HTMLInputElement).value.trim();
-      const v = (r.querySelector(".detail-edit-val-input") as HTMLInputElement).value;
+    headerList.querySelectorAll<HTMLDivElement>('.detail-edit-row').forEach((r) => {
+      const k = (r.querySelector('.detail-edit-key-input') as HTMLInputElement).value.trim();
+      const v = (r.querySelector('.detail-edit-val-input') as HTMLInputElement).value;
       if (k) obj[k] = v;
     });
     editedDetailSpec.headers = obj;
   };
 
   const addEditableHeaderRow = (k: string, v: string) => {
-    const row = document.createElement("div");
-    row.className = "detail-edit-row";
-    const keyInp = document.createElement("input");
-    keyInp.type = "text";
-    keyInp.className = "detail-edit-key-input detail-edit-input";
+    const row = document.createElement('div');
+    row.className = 'detail-edit-row';
+    const keyInp = document.createElement('input');
+    keyInp.type = 'text';
+    keyInp.className = 'detail-edit-key-input detail-edit-input';
     keyInp.value = k;
-    keyInp.placeholder = "Header key";
-    const valInp = document.createElement("input");
-    valInp.type = "text";
-    valInp.className = "detail-edit-val-input detail-edit-input";
+    keyInp.placeholder = 'Header key';
+    const valInp = document.createElement('input');
+    valInp.type = 'text';
+    valInp.className = 'detail-edit-val-input detail-edit-input';
     valInp.value = v;
-    valInp.placeholder = "value";
-    const removeBtn = document.createElement("button");
-    removeBtn.type = "button";
-    removeBtn.className = "header-remove";
-    removeBtn.textContent = "✕";
-    removeBtn.addEventListener("click", () => {
+    valInp.placeholder = 'value';
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'header-remove';
+    removeBtn.textContent = '✕';
+    removeBtn.addEventListener('click', () => {
       row.remove();
       rebuildEditedHeaders();
     });
-    keyInp.addEventListener("input", rebuildEditedHeaders);
-    valInp.addEventListener("input", rebuildEditedHeaders);
+    keyInp.addEventListener('input', rebuildEditedHeaders);
+    valInp.addEventListener('input', rebuildEditedHeaders);
     row.appendChild(keyInp);
     row.appendChild(valInp);
     row.appendChild(removeBtn);
@@ -761,22 +907,22 @@ function renderApiDetail(spec: ApiSpec | null): void {
   };
 
   visibleHeaders.forEach(([k, v]) => addEditableHeaderRow(k, v));
-  const addHdrBtn = document.createElement("button");
-  addHdrBtn.type = "button";
-  addHdrBtn.className = "detail-add-row-btn";
-  addHdrBtn.textContent = "＋ 新增 Header";
-  addHdrBtn.addEventListener("click", () => addEditableHeaderRow("", ""));
+  const addHdrBtn = document.createElement('button');
+  addHdrBtn.type = 'button';
+  addHdrBtn.className = 'detail-add-row-btn';
+  addHdrBtn.textContent = '＋ 新增 Header';
+  addHdrBtn.addEventListener('click', () => addEditableHeaderRow('', ''));
   headerSec.body.appendChild(headerList);
   headerSec.body.appendChild(addHdrBtn);
   container.appendChild(headerSec.wrap);
 
   // ── Body ──
-  const bodySec = buildDetailSection("Body（JSON）", !!spec.bodyTemplate);
-  const bodyTa = document.createElement("textarea");
-  bodyTa.className = "detail-edit-body";
-  bodyTa.placeholder = "（可貼上 JSON）";
-  bodyTa.value = spec.bodyTemplate ?? "";
-  bodyTa.addEventListener("input", () => {
+  const bodySec = buildDetailSection('Body（JSON）', !!spec.bodyTemplate);
+  const bodyTa = document.createElement('textarea');
+  bodyTa.className = 'detail-edit-body';
+  bodyTa.placeholder = '（可貼上 JSON）';
+  bodyTa.value = spec.bodyTemplate ?? '';
+  bodyTa.addEventListener('input', () => {
     if (editedDetailSpec) editedDetailSpec.bodyTemplate = bodyTa.value;
   });
   bodySec.body.appendChild(bodyTa);
@@ -787,7 +933,7 @@ function renderApiDetail(spec: ApiSpec | null): void {
 }
 
 function refreshApiCandidatesFromLatestAssistant(): void {
-  const latestAssistant = [...messages].reverse().find((m) => m.role === "assistant" && m.content.trim());
+  const latestAssistant = [...messages].reverse().find((m) => m.role === 'assistant' && m.content.trim());
   apiCandidates = latestAssistant ? extractApiCandidatesFromText(latestAssistant.content) : [];
   selectedApiIndex = -1;
   pinnedDetailSpec = null;
@@ -802,7 +948,7 @@ function isCustomSpec(spec: ApiSpec): boolean {
 function removeCustomSpec(spec: ApiSpec): void {
   const key = spec.path || spec.api;
   customApiSpecs = customApiSpecs.filter((c) => (c.path || c.api) !== key);
-  const pinnedKey = pinnedDetailSpec ? pinnedDetailSpec.path || pinnedDetailSpec.api : "";
+  const pinnedKey = pinnedDetailSpec ? pinnedDetailSpec.path || pinnedDetailSpec.api : '';
   if (pinnedKey && pinnedKey === key) {
     pinnedDetailSpec = null;
     pinnedSavedApiIndex = -1;
@@ -813,9 +959,9 @@ function renderApiCandidates(): void {
   apiCandidatesEl.replaceChildren();
   if (!allCandidates.length) {
     selectedApiIndex = -1;
-    const empty = document.createElement("div");
-    empty.className = "workflow-subtitle";
-    empty.textContent = "尚未偵測到 API，可手動新增。";
+    const empty = document.createElement('div');
+    empty.className = 'workflow-subtitle';
+    empty.textContent = '尚未偵測到 API，可手動新增。';
     apiCandidatesEl.appendChild(empty);
     renderApiDetail(pinnedDetailSpec || null);
     return;
@@ -824,24 +970,24 @@ function renderApiCandidates(): void {
     selectedApiIndex = allCandidates.length - 1;
   }
   allCandidates.forEach((spec, index) => {
-    const wrap = document.createElement("div");
-    wrap.className = "api-candidate-wrap";
-    const row = document.createElement("button");
-    row.type = "button";
-    row.className = "api-candidate";
-    row.classList.toggle("active", index === selectedApiIndex);
-    const name = document.createElement("div");
-    name.className = "api-candidate-name";
+    const wrap = document.createElement('div');
+    wrap.className = 'api-candidate-wrap';
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'api-candidate';
+    row.classList.toggle('active', index === selectedApiIndex);
+    const name = document.createElement('div');
+    name.className = 'api-candidate-name';
     name.textContent = spec.requestName || spec.api;
     row.appendChild(name);
-    const purpose = (spec.purpose || "").trim();
+    const purpose = (spec.purpose || '').trim();
     if (purpose) {
-      const text = document.createElement("span");
-      text.className = "api-candidate-purpose";
+      const text = document.createElement('span');
+      text.className = 'api-candidate-purpose';
       text.textContent = purpose;
       row.appendChild(text);
     }
-    row.addEventListener("click", () => {
+    row.addEventListener('click', () => {
       selectedApiIndex = index;
       pinnedDetailSpec = null;
       pinnedSavedApiIndex = -1;
@@ -849,12 +995,12 @@ function renderApiCandidates(): void {
     });
     wrap.appendChild(row);
     if (isCustomSpec(spec)) {
-      const removeBtn = document.createElement("button");
-      removeBtn.type = "button";
-      removeBtn.className = "api-candidate-remove";
-      removeBtn.title = "移除此 API";
-      removeBtn.textContent = "✕";
-      removeBtn.addEventListener("click", async (e) => {
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'api-candidate-remove';
+      removeBtn.title = '移除此 API';
+      removeBtn.textContent = '✕';
+      removeBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         removeCustomSpec(spec);
         if (selectedApiIndex >= allCandidates.length - 1) selectedApiIndex = Math.max(0, selectedApiIndex - 1);
@@ -873,8 +1019,8 @@ function renderApiCandidates(): void {
 
 function isSensitiveShareHeaderKey(key: string): boolean {
   const k = key.trim().toLowerCase();
-  if (k === "authorization" || k === "cookie") return true;
-  if (k === "x-api-key" || k.endsWith("api-key")) return true;
+  if (k === 'authorization' || k === 'cookie') return true;
+  if (k === 'x-api-key' || k.endsWith('api-key')) return true;
   return false;
 }
 
@@ -893,46 +1039,46 @@ function sanitizeStepForShare(step: WorkflowStep): WorkflowStep {
     ...step,
     params: [...(step.params ?? [])],
     headers: sanitizeHeadersForShare(step.headers),
-    bearerToken: "",
+    bearerToken: '',
   };
 }
 
 /** 用於「類似流程」比對：method + 正規化後的請求目標（path 優先，否則 api；完整 URL 取 pathname） */
 function normalizeWorkflowRequestTarget(raw: string): string {
   const t = raw.trim();
-  if (!t) return "";
+  if (!t) return '';
   if (/^https?:\/\//i.test(t)) {
     try {
       const u = new URL(t);
-      const p = u.pathname.replace(/\/+$/, "") || "/";
+      const p = u.pathname.replace(/\/+$/, '') || '/';
       return p.toLowerCase();
     } catch {
       return t.toLowerCase();
     }
   }
-  return t.replace(/^\/+/, "").replace(/\/+$/, "").toLowerCase();
+  return t.replace(/^\/+/, '').replace(/\/+$/, '').toLowerCase();
 }
 
 function workflowStepSignature(step: WorkflowStep): string {
-  const method = (step.method || "GET").toUpperCase();
-  const raw = (step.path && step.path.trim()) || (step.api || "").trim();
+  const method = (step.method || 'GET').toUpperCase();
+  const raw = (step.path && step.path.trim()) || (step.api || '').trim();
   return `${method}:${normalizeWorkflowRequestTarget(raw)}`;
 }
 
 /** 類似流程：與任一「已儲存流程」的 (method + 正規化 path) 序列完全相同 */
 function findSavedWorkflowWithSameSignature(steps: WorkflowStep[]): SavedWorkflow | null {
   if (!steps.length) return null;
-  const sig = steps.map(workflowStepSignature).join("\n");
+  const sig = steps.map(workflowStepSignature).join('\n');
   for (const w of savedWorkflows) {
     if (!w.steps.length) continue;
-    if (w.steps.map(workflowStepSignature).join("\n") === sig) return w;
+    if (w.steps.map(workflowStepSignature).join('\n') === sig) return w;
   }
   return null;
 }
 
 function workflowStepsHaveAbsoluteUrl(steps: WorkflowStep[]): boolean {
   return steps.some((s) => {
-    const t = (s.path && s.path.trim()) || (s.api || "").trim();
+    const t = (s.path && s.path.trim()) || (s.api || '').trim();
     return /^https?:\/\//i.test(t);
   });
 }
@@ -943,7 +1089,7 @@ function buildWorkflowExportJson(workflowName: string, steps: WorkflowStep[]): s
     version: WORKFLOW_EXPORT_VERSION,
     exportedAt: new Date().toISOString(),
     workflow: {
-      name: workflowName.trim() || "未命名流程",
+      name: workflowName.trim() || '未命名流程',
       steps: steps.map(sanitizeStepForShare),
     },
   };
@@ -960,14 +1106,14 @@ async function copyWorkflowJsonToClipboard(json: string): Promise<boolean> {
     /* fallback */
   }
   try {
-    const ta = document.createElement("textarea");
+    const ta = document.createElement('textarea');
     ta.value = json;
-    ta.style.position = "fixed";
-    ta.style.opacity = "0";
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
     document.body.appendChild(ta);
     ta.focus();
     ta.select();
-    const ok = document.execCommand("copy");
+    const ok = document.execCommand('copy');
     document.body.removeChild(ta);
     return ok;
   } catch {
@@ -976,9 +1122,9 @@ async function copyWorkflowJsonToClipboard(json: string): Promise<boolean> {
 }
 
 function downloadWorkflowJsonFile(filename: string, json: string): void {
-  const safe = filename.replace(/[^\w\u4e00-\u9fff.-]+/g, "_").slice(0, 80) || "workflow";
-  const blob = new Blob([json], { type: "application/json;charset=utf-8" });
-  const a = document.createElement("a");
+  const safe = filename.replace(/[^\w\u4e00-\u9fff.-]+/g, '_').slice(0, 80) || 'workflow';
+  const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+  const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `${safe}.json`;
   a.click();
@@ -986,67 +1132,67 @@ function downloadWorkflowJsonFile(filename: string, json: string): void {
 }
 
 function parseWorkflowStepFromImport(raw: unknown): WorkflowStep | null {
-  if (!raw || typeof raw !== "object") return null;
+  if (!raw || typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
-  const apiRaw = typeof o.api === "string" ? o.api.trim() : "";
-  const pathRaw = typeof o.path === "string" ? o.path.trim() : "";
+  const apiRaw = typeof o.api === 'string' ? o.api.trim() : '';
+  const pathRaw = typeof o.path === 'string' ? o.path.trim() : '';
   const target = pathRaw || apiRaw;
   if (!target) return null;
-  const purpose = typeof o.purpose === "string" ? o.purpose.trim() : "匯入流程步驟";
+  const purpose = typeof o.purpose === 'string' ? o.purpose.trim() : '匯入流程步驟';
   const params = Array.isArray(o.params) ? o.params.map((p) => String(p).trim()).filter(Boolean) : [];
-  const methodRaw = typeof o.method === "string" ? o.method.trim().toUpperCase() : "";
-  const method = methodRaw || "GET";
+  const methodRaw = typeof o.method === 'string' ? o.method.trim().toUpperCase() : '';
+  const method = methodRaw || 'GET';
   let headers: Record<string, string> = {};
-  if (o.headers && typeof o.headers === "object" && !Array.isArray(o.headers)) {
+  if (o.headers && typeof o.headers === 'object' && !Array.isArray(o.headers)) {
     for (const [k, v] of Object.entries(o.headers as Record<string, unknown>)) {
-      if (typeof v === "string") headers[k] = v;
+      if (typeof v === 'string') headers[k] = v;
     }
   }
   headers = sanitizeHeadersForShare(headers);
-  const bodyTemplate = typeof o.bodyTemplate === "string" ? o.bodyTemplate : "";
-  const requestName = typeof o.requestName === "string" ? o.requestName.trim() : undefined;
+  const bodyTemplate = typeof o.bodyTemplate === 'string' ? o.bodyTemplate : '';
+  const requestName = typeof o.requestName === 'string' ? o.requestName.trim() : undefined;
   return {
     api: apiRaw || pathRaw,
     path: pathRaw || undefined,
     requestName,
-    method: method || "GET",
+    method: method || 'GET',
     headers,
     bodyTemplate,
-    bearerToken: "",
-    purpose: purpose || "匯入流程步驟",
+    bearerToken: '',
+    purpose: purpose || '匯入流程步驟',
     params,
   };
 }
 
 function parseWorkflowImportJson(
-  text: string,
+  text: string
 ): { ok: true; steps: WorkflowStep[]; name: string } | { ok: false; error: string } {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text) as unknown;
   } catch {
-    return { ok: false, error: "不是有效的 JSON。" };
+    return { ok: false, error: '不是有效的 JSON。' };
   }
-  if (!parsed || typeof parsed !== "object") {
-    return { ok: false, error: "JSON 根節點必須為物件。" };
+  if (!parsed || typeof parsed !== 'object') {
+    return { ok: false, error: 'JSON 根節點必須為物件。' };
   }
   const root = parsed as Record<string, unknown>;
   if (root.format !== WORKFLOW_EXPORT_FORMAT) {
     return { ok: false, error: `缺少或無效的 format（須為「${WORKFLOW_EXPORT_FORMAT}」）。` };
   }
-  const version = typeof root.version === "number" ? root.version : Number(root.version);
+  const version = typeof root.version === 'number' ? root.version : Number(root.version);
   if (version !== WORKFLOW_EXPORT_VERSION) {
     return { ok: false, error: `不支援的版本：${String(root.version)}（目前僅支援 ${WORKFLOW_EXPORT_VERSION}）。` };
   }
   const wf = root.workflow;
-  if (!wf || typeof wf !== "object") {
-    return { ok: false, error: "缺少 workflow 物件。" };
+  if (!wf || typeof wf !== 'object') {
+    return { ok: false, error: '缺少 workflow 物件。' };
   }
   const wfo = wf as Record<string, unknown>;
-  const name = typeof wfo.name === "string" ? wfo.name.trim() : "";
+  const name = typeof wfo.name === 'string' ? wfo.name.trim() : '';
   const stepsRaw = wfo.steps;
   if (!Array.isArray(stepsRaw) || !stepsRaw.length) {
-    return { ok: false, error: "workflow.steps 必須為非空陣列。" };
+    return { ok: false, error: 'workflow.steps 必須為非空陣列。' };
   }
   const steps: WorkflowStep[] = [];
   for (let i = 0; i < stepsRaw.length; i += 1) {
@@ -1060,12 +1206,12 @@ function parseWorkflowImportJson(
 function defaultImportedWorkflowName(suggested: string): string {
   const base = suggested.trim();
   if (base) return base;
-  const ts = new Date().toLocaleString("zh-Hant-TW", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
+  const ts = new Date().toLocaleString('zh-Hant-TW', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
   });
   return `匯入流程 ${ts}`;
 }
@@ -1087,84 +1233,84 @@ type WorkflowImportConfirmInfo = {
 
 function showWorkflowImportConfirmDialog(info: WorkflowImportConfirmInfo): Promise<boolean> {
   return new Promise((resolve) => {
-    const overlay = document.createElement("div");
-    overlay.className = "exec-confirm-overlay";
-    const dialog = document.createElement("div");
-    dialog.className = "exec-confirm-dialog";
+    const overlay = document.createElement('div');
+    overlay.className = 'exec-confirm-overlay';
+    const dialog = document.createElement('div');
+    dialog.className = 'exec-confirm-dialog';
 
-    const titleEl = document.createElement("div");
-    titleEl.className = "exec-confirm-title";
-    titleEl.textContent = "匯入流程至草稿";
+    const titleEl = document.createElement('div');
+    titleEl.className = 'exec-confirm-title';
+    titleEl.textContent = '匯入流程至草稿';
 
-    const intro = document.createElement("div");
-    intro.className = "exec-confirm-subtitle";
+    const intro = document.createElement('div');
+    intro.className = 'exec-confirm-subtitle';
     intro.textContent = `將載入「${info.draftName}」，共 ${info.stepCount} 個步驟，並覆寫目前草稿。`;
 
     const showProminentAlerts = Boolean(info.duplicateName || info.similar);
     let alertBanner: HTMLDivElement | null = null;
     if (showProminentAlerts) {
-      alertBanner = document.createElement("div");
-      alertBanner.className = "workflow-import-alert-banner";
-      const bannerTitle = document.createElement("div");
-      bannerTitle.className = "workflow-import-alert-title";
-      bannerTitle.textContent = "請留意：與現有流程重疊";
+      alertBanner = document.createElement('div');
+      alertBanner.className = 'workflow-import-alert-banner';
+      const bannerTitle = document.createElement('div');
+      bannerTitle.className = 'workflow-import-alert-title';
+      bannerTitle.textContent = '請留意：與現有流程重疊';
       alertBanner.appendChild(bannerTitle);
 
       if (info.duplicateName && info.similar && info.duplicateName.id === info.similar.id) {
-        const row = document.createElement("div");
-        row.className = "workflow-import-alert-item workflow-import-alert-item--both";
+        const row = document.createElement('div');
+        row.className = 'workflow-import-alert-item workflow-import-alert-item--both';
         row.textContent = `與已儲存流程「${info.similar.name}」同名，且每步 HTTP 方法 + 正規化路徑序列完全相同，極可能為同一條流程。`;
         alertBanner.appendChild(row);
       } else {
         if (info.duplicateName) {
-          const row = document.createElement("div");
-          row.className = "workflow-import-alert-item workflow-import-alert-item--duplicate";
+          const row = document.createElement('div');
+          row.className = 'workflow-import-alert-item workflow-import-alert-item--duplicate';
           row.textContent = `已有已儲存流程使用相同名稱「${info.draftName}」（與「${info.duplicateName.name}」同名），匯入後草稿名稱也會相同，建議匯入後改名再儲存。`;
           alertBanner.appendChild(row);
         }
         if (info.similar) {
-          const row = document.createElement("div");
-          row.className = "workflow-import-alert-item workflow-import-alert-item--similar";
+          const row = document.createElement('div');
+          row.className = 'workflow-import-alert-item workflow-import-alert-item--similar';
           row.textContent = `步驟路徑與「${info.similar.name}」完全相同（每步 HTTP 方法 + 正規化路徑序列一致），可能與該流程重複。`;
           alertBanner.appendChild(row);
         }
       }
     }
 
-    const list = document.createElement("ul");
-    list.className = "workflow-import-confirm-list";
+    const list = document.createElement('ul');
+    list.className = 'workflow-import-confirm-list';
 
-    const liAuth = document.createElement("li");
+    const liAuth = document.createElement('li');
     liAuth.textContent =
-      "此 JSON 不含 Authorization、API Key、Cookie 等敏感 Header；若 API 需要，請匯入後在各步驟的 API 設定中自行補上。";
+      '此 JSON 不含 Authorization、API Key、Cookie 等敏感 Header；若 API 需要，請匯入後在各步驟的 API 設定中自行補上。';
     list.appendChild(liAuth);
 
     if (info.hasAbsoluteUrl) {
-      const liUrl = document.createElement("li");
+      const liUrl = document.createElement('li');
       liUrl.textContent =
-        "偵測到完整 URL（含 http/https）：請確認與你目前的環境一致，必要時請改為相對 path 或正確的網址。";
+        '偵測到完整 URL（含 http/https）：請確認與你目前的環境一致，必要時請改為相對 path 或正確的網址。';
       list.appendChild(liUrl);
     }
 
-    const actions = document.createElement("div");
-    actions.className = "exec-confirm-actions";
-    const cancelBtn = document.createElement("button");
-    cancelBtn.type = "button";
-    cancelBtn.className = "exec-confirm-cancel";
-    cancelBtn.textContent = "取消";
-    const okBtn = document.createElement("button");
-    okBtn.type = "button";
-    okBtn.className = "exec-confirm-ok";
-    okBtn.textContent = "仍匯入";
+    const actions = document.createElement('div');
+    actions.className = 'exec-confirm-actions';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'exec-confirm-cancel';
+    cancelBtn.textContent = '取消';
+    const okBtn = document.createElement('button');
+    okBtn.type = 'button';
+    okBtn.className = 'exec-confirm-ok';
+    okBtn.textContent = '仍匯入';
 
     function close(ok: boolean): void {
       overlay.remove();
       resolve(ok);
     }
 
-    cancelBtn.addEventListener("click", () => close(false));
-    okBtn.addEventListener("click", () => close(true));
-    overlay.addEventListener("click", (e) => {
+    cancelBtn.addEventListener('click', () => close(false));
+    okBtn.addEventListener('click', () => close(true));
+    overlay.addEventListener('click', (e) => {
       if (e.target === overlay) close(false);
     });
 
@@ -1185,7 +1331,7 @@ function showWorkflowImportConfirmDialog(info: WorkflowImportConfirmInfo): Promi
 function getDraftWorkflowDisplayName(): string {
   const fromInput = draftWorkflowNameInputEl.value.trim();
   if (fromInput) return fromInput;
-  return (currentWorkflowName || "").trim() || "草稿";
+  return (currentWorkflowName || '').trim() || '草稿';
 }
 
 function syncDraftWorkflowNameInputFromState(): void {
@@ -1195,60 +1341,60 @@ function syncDraftWorkflowNameInputFromState(): void {
 function renderDraftSteps(): void {
   draftStepsEl.replaceChildren();
   if (!draftSteps.length) {
-    const empty = document.createElement("li");
-    empty.className = "workflow-subtitle";
-    empty.textContent = "尚未加入步驟。";
+    const empty = document.createElement('li');
+    empty.className = 'workflow-subtitle';
+    empty.textContent = '尚未加入步驟。';
     draftStepsEl.appendChild(empty);
     return;
   }
   draftSteps.forEach((step, index) => {
-    const item = document.createElement("li");
-    item.className = "draft-step-item" + (index === editingStepIndex ? " editing" : "");
-    const info = document.createElement("div");
-    info.className = "draft-step-info";
-    const num = document.createElement("span");
-    num.className = "draft-step-num";
+    const item = document.createElement('li');
+    item.className = 'draft-step-item' + (index === editingStepIndex ? ' editing' : '');
+    const info = document.createElement('div');
+    info.className = 'draft-step-info';
+    const num = document.createElement('span');
+    num.className = 'draft-step-num';
     num.textContent = `${index + 1}.`;
-    const title = document.createElement("span");
-    title.className = "draft-step-title";
+    const title = document.createElement('span');
+    title.className = 'draft-step-title';
     title.textContent = step.requestName || step.api;
     info.appendChild(num);
     info.appendChild(title);
-    const purpose = (step.purpose || "").trim();
+    const purpose = (step.purpose || '').trim();
     if (purpose) {
-      const purposeEl = document.createElement("span");
-      purposeEl.className = "draft-step-purpose";
+      const purposeEl = document.createElement('span');
+      purposeEl.className = 'draft-step-purpose';
       purposeEl.textContent = purpose;
       info.appendChild(purposeEl);
     }
-    const actions = document.createElement("div");
-    actions.className = "draft-step-actions";
-    const editBtn = document.createElement("button");
-    editBtn.type = "button";
-    editBtn.className = "draft-step-edit";
-    editBtn.textContent = index === editingStepIndex ? "編輯中" : "編輯";
+    const actions = document.createElement('div');
+    actions.className = 'draft-step-actions';
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'draft-step-edit';
+    editBtn.textContent = index === editingStepIndex ? '編輯中' : '編輯';
     editBtn.disabled = index === editingStepIndex;
-    editBtn.addEventListener("click", () => {
+    editBtn.addEventListener('click', () => {
       editingStepIndex = index;
-      addStepButton.textContent = "更新步驟";
-      addStepButton.classList.add("updating");
+      addStepButton.textContent = '更新步驟';
+      addStepButton.classList.add('updating');
       renderApiDetail({ ...step });
       renderDraftSteps();
     });
-    const delBtn = document.createElement("button");
-    delBtn.type = "button";
-    delBtn.className = "draft-step-delete";
-    delBtn.textContent = "✕";
-    delBtn.title = index === editingStepIndex ? "編輯中，無法刪除" : "移除此步驟";
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'draft-step-delete';
+    delBtn.textContent = '✕';
+    delBtn.title = index === editingStepIndex ? '編輯中，無法刪除' : '移除此步驟';
     delBtn.disabled = index === editingStepIndex;
-    delBtn.addEventListener("click", () => {
+    delBtn.addEventListener('click', () => {
       const stepTitle = step.requestName || step.api;
       if (!confirmDelete(`確定要刪除步驟「${stepTitle}」嗎？`)) return;
       draftSteps.splice(index, 1);
       if (editingStepIndex === index) {
         editingStepIndex = -1;
-        addStepButton.textContent = "加入流程步驟";
-        addStepButton.classList.remove("updating");
+        addStepButton.textContent = '加入流程步驟';
+        addStepButton.classList.remove('updating');
         renderApiDetail(getAllApiCandidates()[selectedApiIndex] ?? null);
       } else if (editingStepIndex > index) {
         editingStepIndex--;
@@ -1266,32 +1412,32 @@ function renderDraftSteps(): void {
 function renderSavedWorkflows(): void {
   savedWorkflowsEl.replaceChildren();
   if (!savedWorkflows.length) {
-    const empty = document.createElement("div");
-    empty.className = "workflow-subtitle";
-    empty.textContent = "尚未建立流程。";
+    const empty = document.createElement('div');
+    empty.className = 'workflow-subtitle';
+    empty.textContent = '尚未建立流程。';
     savedWorkflowsEl.appendChild(empty);
     return;
   }
   savedWorkflows.forEach((workflow, index) => {
-    const card = document.createElement("div");
-    card.className = "workflow-card";
+    const card = document.createElement('div');
+    card.className = 'workflow-card';
 
-    const nameEl = document.createElement("div");
-    nameEl.className = "workflow-card-name";
+    const nameEl = document.createElement('div');
+    nameEl.className = 'workflow-card-name';
     nameEl.textContent = workflow.name;
-    nameEl.title = workflow.steps.map((step) => step.api).join(", ");
+    nameEl.title = workflow.steps.map((step) => step.api).join(', ');
 
-    const stepsEl = document.createElement("div");
-    stepsEl.className = "workflow-card-steps";
+    const stepsEl = document.createElement('div');
+    stepsEl.className = 'workflow-card-steps';
     stepsEl.textContent = `${workflow.steps.length} 步`;
 
-    const actions = document.createElement("div");
-    actions.className = "workflow-card-actions";
+    const actions = document.createElement('div');
+    actions.className = 'workflow-card-actions';
 
-    const loadBtn = document.createElement("button");
-    loadBtn.type = "button";
-    loadBtn.textContent = "載入";
-    loadBtn.addEventListener("click", () => {
+    const loadBtn = document.createElement('button');
+    loadBtn.type = 'button';
+    loadBtn.textContent = '載入';
+    loadBtn.addEventListener('click', () => {
       draftSteps = workflow.steps.map((step) => ({
         ...step,
         params: [...step.params],
@@ -1302,20 +1448,20 @@ function renderSavedWorkflows(): void {
       draftNameFromImport = false;
       renderDraftSteps();
       setWorkflowPanelOpen(true);
-      setToast(`已載入流程：${workflow.name}`, "ok");
+      setToast(`已載入流程：${workflow.name}`, 'ok');
       chatInputEl.focus();
     });
 
-    const deleteBtn = document.createElement("button");
-    deleteBtn.type = "button";
-    deleteBtn.className = "workflow-card-delete";
-    deleteBtn.textContent = "刪除";
-    deleteBtn.addEventListener("click", async () => {
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'workflow-card-delete';
+    deleteBtn.textContent = '刪除';
+    deleteBtn.addEventListener('click', async () => {
       if (!confirmDelete(`確定要刪除已儲存流程「${workflow.name}」嗎？`)) return;
       savedWorkflows.splice(index, 1);
       renderSavedWorkflows();
       await saveMessages();
-      setToast(`已刪除流程：${workflow.name}`, "ok");
+      setToast(`已刪除流程：${workflow.name}`, 'ok');
     });
 
     actions.appendChild(loadBtn);
@@ -1330,39 +1476,39 @@ function renderSavedWorkflows(): void {
 function renderSavedApis(): void {
   savedApisListEl.replaceChildren();
   if (!customApiSpecs.length) {
-    const empty = document.createElement("div");
-    empty.className = "detail-empty";
-    empty.textContent = "尚未儲存任何 API";
+    const empty = document.createElement('div');
+    empty.className = 'detail-empty';
+    empty.textContent = '尚未儲存任何 API';
     savedApisListEl.appendChild(empty);
     return;
   }
   customApiSpecs.forEach((spec, index) => {
-    const card = document.createElement("div");
-    card.className = "saved-api-card";
-    if (index === pinnedSavedApiIndex) card.classList.add("selected");
+    const card = document.createElement('div');
+    card.className = 'saved-api-card';
+    if (index === pinnedSavedApiIndex) card.classList.add('selected');
 
-    const info = document.createElement("div");
-    info.className = "saved-api-info";
-    const nameEl = document.createElement("div");
-    nameEl.className = "saved-api-name";
+    const info = document.createElement('div');
+    info.className = 'saved-api-info';
+    const nameEl = document.createElement('div');
+    nameEl.className = 'saved-api-name';
     nameEl.textContent = spec.requestName ?? spec.api;
     info.appendChild(nameEl);
-    const purpose = (spec.purpose ?? "").trim();
+    const purpose = (spec.purpose ?? '').trim();
     if (purpose) {
-      const purposeEl = document.createElement("div");
-      purposeEl.className = "saved-api-purpose";
+      const purposeEl = document.createElement('div');
+      purposeEl.className = 'saved-api-purpose';
       purposeEl.textContent = purpose;
       info.appendChild(purposeEl);
     }
 
-    const actions = document.createElement("div");
-    actions.className = "saved-api-actions";
+    const actions = document.createElement('div');
+    actions.className = 'saved-api-actions';
 
-    const selectBtn = document.createElement("button");
-    selectBtn.type = "button";
-    selectBtn.textContent = "選擇";
-    if (index === pinnedSavedApiIndex) selectBtn.classList.add("active");
-    selectBtn.addEventListener("click", () => {
+    const selectBtn = document.createElement('button');
+    selectBtn.type = 'button';
+    selectBtn.textContent = '選擇';
+    if (index === pinnedSavedApiIndex) selectBtn.classList.add('active');
+    selectBtn.addEventListener('click', () => {
       selectedApiIndex = -1;
       pinnedSavedApiIndex = index;
       pinnedDetailSpec = { ...spec, params: [...(spec.params ?? [])], headers: { ...(spec.headers ?? {}) } };
@@ -1370,12 +1516,12 @@ function renderSavedApis(): void {
       renderApiCandidates();
     });
 
-    const deleteBtn = document.createElement("button");
-    deleteBtn.type = "button";
-    deleteBtn.className = "saved-api-delete";
-    deleteBtn.textContent = "✕";
-    deleteBtn.title = "刪除此 API";
-    deleteBtn.addEventListener("click", async () => {
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'saved-api-delete';
+    deleteBtn.textContent = '✕';
+    deleteBtn.title = '刪除此 API';
+    deleteBtn.addEventListener('click', async () => {
       const apiTitle = spec.requestName || spec.api;
       if (!confirmDelete(`確定要刪除已儲存 API「${apiTitle}」嗎？`)) return;
       customApiSpecs.splice(index, 1);
@@ -1414,14 +1560,14 @@ function createOAuthState(): string {
     const bytes = new Uint8Array(16);
     globalThis.crypto.getRandomValues(bytes);
     return Array.from(bytes)
-      .map((byte) => byte.toString(16).padStart(2, "0"))
-      .join("");
+      .map((byte) => byte.toString(16).padStart(2, '0'))
+      .join('');
   }
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 async function fetchGoogleUserInfo(accessToken: string): Promise<GoogleUserInfo> {
-  const response = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+  const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!response.ok) {
@@ -1432,14 +1578,14 @@ async function fetchGoogleUserInfo(accessToken: string): Promise<GoogleUserInfo>
 
 async function exchangeGoogleTokenForFirebaseIdToken(googleAccessToken: string): Promise<string> {
   const endpoint = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${encodeURIComponent(
-    FIREBASE_WEB_API_KEY,
+    FIREBASE_WEB_API_KEY
   )}`;
   const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       postBody: `access_token=${encodeURIComponent(googleAccessToken)}&providerId=google.com`,
-      requestUri: "https://localhost",
+      requestUri: 'https://localhost',
       returnIdpCredential: true,
       returnSecureToken: true,
     }),
@@ -1449,20 +1595,20 @@ async function exchangeGoogleTokenForFirebaseIdToken(googleAccessToken: string):
     throw new Error(`Firebase token 交換失敗 (${response.status}) ${text}`);
   }
   const data = (await response.json()) as { idToken?: string };
-  if (!data.idToken) throw new Error("Firebase 回應缺少 idToken");
+  if (!data.idToken) throw new Error('Firebase 回應缺少 idToken');
   return data.idToken;
 }
 
 async function callAgentChatApi(message: string): Promise<string> {
   if (!firebaseIdToken) {
-    throw new Error("尚未取得 Firebase idToken，請先完成 Google 授權");
+    throw new Error('尚未取得 Firebase idToken，請先完成 Google 授權');
   }
   const response = await fetch(AGENT_CHAT_API, {
-    method: "POST",
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
       Authorization: `Bearer ${firebaseIdToken}`,
-      "x-page-url": globalThis.location?.href || "",
+      'x-page-url': globalThis.location?.href || '',
     },
     body: JSON.stringify({
       message,
@@ -1486,112 +1632,198 @@ async function callAgentChatApi(message: string): Promise<string> {
 }
 
 function extractTextFromPayload(payload: unknown): string {
-  if (!payload) return "";
-  if (typeof payload === "string") return payload;
-  if (typeof payload !== "object") return "";
+  if (!payload) return '';
+  if (typeof payload === 'string') return payload;
+  if (typeof payload !== 'object') return '';
   const data = payload as Record<string, unknown>;
-  if (typeof data.reply === "string") return data.reply;
-  if (typeof data.message === "string") return data.message;
-  if (typeof data.content === "string") return data.content;
-  if (data.data && typeof data.data === "object") {
+  if (typeof data.reply === 'string') return data.reply;
+  if (typeof data.message === 'string') return data.message;
+  if (typeof data.content === 'string') return data.content;
+  if (data.data && typeof data.data === 'object') {
     const nested = data.data as Record<string, unknown>;
-    if (typeof nested.reply === "string") return nested.reply;
-    if (typeof nested.message === "string") return nested.message;
-    if (typeof nested.content === "string") return nested.content;
+    if (typeof nested.reply === 'string') return nested.reply;
+    if (typeof nested.message === 'string') return nested.message;
+    if (typeof nested.content === 'string') return nested.content;
   }
   if (Array.isArray(data.choices)) {
     const first = data.choices[0] as Record<string, unknown> | undefined;
     const delta = first?.delta as Record<string, unknown> | undefined;
-    if (typeof delta?.content === "string") return delta.content;
-    if (typeof first?.text === "string") return first.text;
+    if (typeof delta?.content === 'string') return delta.content;
+    if (typeof first?.text === 'string') return first.text;
   }
-  return "";
+  return '';
 }
 
 function stripThinkingText(text: string): string {
-  if (!text) return "";
+  if (!text) return '';
   return text
-    .replace(/<think>[\s\S]*?<\/think>/gi, "")
-    .replace(/\[thinking\][\s\S]*?\[\/thinking\]/gi, "")
-    .replace(/^\s*(思考|thinking)\s*[:：].*$/gim, "");
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/\[thinking\][\s\S]*?\[\/thinking\]/gi, '')
+    .replace(/^\s*(思考|thinking)\s*[:：].*$/gim, '');
 }
 
 /** Parse one SSE block (between \\n\\n). Returns event type (lowercase) or null if omitted. */
 function parseSseBlock(block: string): { eventType: string | null; payloadText: string } {
   let eventType: string | null = null;
   const dataParts: string[] = [];
-  for (const raw of block.split("\n")) {
+  for (const raw of block.split('\n')) {
     const line = raw.trim();
     if (!line) continue;
-    if (line.startsWith("event:")) {
+    if (line.startsWith('event:')) {
       eventType = line.slice(6).trim().toLowerCase();
-    } else if (line.startsWith("data:")) {
+    } else if (line.startsWith('data:')) {
       dataParts.push(line.slice(5).trim());
     }
   }
-  return { eventType, payloadText: dataParts.join("\n") };
+  return { eventType, payloadText: dataParts.join('\n') };
 }
 
 /** Only `event: delta` contributes to the chat; other `event:` types are skipped. Blocks without `event:` still emit (legacy streams that only send `data:`). */
 function shouldEmitSseDelta(eventType: string | null): boolean {
   if (eventType === null) return true;
-  return eventType === "delta";
+  return eventType === 'delta';
 }
 
 function escapeHtml(text: string): string {
   return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
-function renderAssistantMarkdown(text: string): string {
-  const escaped = escapeHtml(text);
+/** 將完整 URL 拆成可編輯的「基底」與「路徑＋查詢」；相對路徑則基底為空 */
+function splitRequestTargetForEditor(raw: string): { base: string; pathAndQuery: string } {
+  const s = (raw || '').trim();
+  if (!s) return { base: '', pathAndQuery: '' };
+  if (/^https?:\/\//i.test(s)) {
+    try {
+      const u = new URL(s);
+      return { base: u.origin, pathAndQuery: `${u.pathname}${u.search}` || '/' };
+    } catch {
+      return { base: '', pathAndQuery: s };
+    }
+  }
+  return { base: '', pathAndQuery: s };
+}
+
+function joinRequestTargetFromEditor(base: string, pathAndQuery: string): string {
+  const b = (base || '').trim();
+  const p = (pathAndQuery || '').trim();
+  if (!b) return p;
+  if (!p) return b;
+  const baseClean = b.replace(/\/+$/, '');
+  let pathPart = p;
+  if (pathPart.startsWith('?')) {
+    pathPart = `/${pathPart}`;
+  } else {
+    pathPart = pathPart.replace(/^\/+/, '');
+  }
+  if (/^https?:\/\//i.test(baseClean)) {
+    try {
+      const joinBase = baseClean.endsWith('/') ? baseClean : `${baseClean}/`;
+      return new URL(pathPart, joinBase).toString();
+    } catch {
+      return `${baseClean}/${pathPart}`;
+    }
+  }
+  return `${baseClean}/${pathPart}`;
+}
+
+/** 從合併後的請求字串取出「不含 query」前綴與 query 字串（供 Params 編輯同步） */
+function getPathNoQueryAndSearchFromCombined(combined: string): { pathNoQuery: string; queryString: string } {
+  const s = (combined || '').trim();
+  if (!s) return { pathNoQuery: '', queryString: '' };
+  if (/^https?:\/\//i.test(s)) {
+    try {
+      const u = new URL(s);
+      return {
+        pathNoQuery: `${u.origin}${u.pathname}`,
+        queryString: u.searchParams.toString(),
+      };
+    } catch {
+      /**/
+    }
+  }
+  const qIdx = s.indexOf('?');
+  if (qIdx < 0) return { pathNoQuery: s, queryString: '' };
+  return { pathNoQuery: s.slice(0, qIdx), queryString: s.slice(qIdx + 1) };
+}
+
+let markdownCodeBlockSeq = 0;
+
+function renderMarkdownFromEscapedBlocks(escaped: string): string {
   const blocks = escaped.split(/\n{2,}/);
   return blocks
     .map((block) => {
       const trimmed = block.trim();
-      if (!trimmed) return "";
-      if (trimmed.startsWith("### ")) {
+      if (!trimmed) return '';
+      if (trimmed.startsWith('### ')) {
         return `<h4>${trimmed.slice(4)}</h4>`;
       }
-      if (trimmed.startsWith("## ")) {
+      if (trimmed.startsWith('## ')) {
         return `<h3>${trimmed.slice(3)}</h3>`;
       }
-      if (trimmed.startsWith("# ")) {
+      if (trimmed.startsWith('# ')) {
         return `<h2>${trimmed.slice(2)}</h2>`;
       }
-      const lines = trimmed.split("\n");
+      const lines = trimmed.split('\n');
       if (lines.every((line) => /^\s*[-*]\s+/.test(line))) {
         const items = lines
-          .map((line) => line.replace(/^\s*[-*]\s+/, ""))
+          .map((line) => line.replace(/^\s*[-*]\s+/, ''))
           .map((line) => `<li>${line}</li>`)
-          .join("");
+          .join('');
         return `<ul>${items}</ul>`;
       }
       const paragraph = trimmed
-        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-        .replace(/`([^`]+?)`/g, "<code>$1</code>")
-        .replace(/\n/g, "<br>");
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/`([^`]+?)`/g, '<code>$1</code>')
+        .replace(/\n/g, '<br>');
       return `<p>${paragraph}</p>`;
     })
     .filter(Boolean)
-    .join("");
+    .join('');
+}
+
+/** 支援 ``` 程式碼區塊與「複製」按鈕；其餘段落沿用原本 Markdown 子集 */
+function renderAssistantMarkdown(text: string): string {
+  const parts: string[] = [];
+  const fenceRe = /```([^\n`]*)\r?\n([\s\S]*?)```/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = fenceRe.exec(text)) !== null) {
+    const before = text.slice(last, m.index);
+    if (before.trim()) {
+      parts.push(renderMarkdownFromEscapedBlocks(escapeHtml(before)));
+    }
+    const lang = (m[1] || '').trim();
+    const rawCode = m[2].replace(/\n$/, '');
+    const id = `md-code-${markdownCodeBlockSeq++}`;
+    const langHtml = escapeHtml(lang || 'bash');
+    parts.push(
+      `<div class="md-code-wrap"><div class="md-code-toolbar"><span class="md-code-lang">${langHtml}</span><button type="button" class="md-code-copy" data-copy="${id}" title="複製此區塊">複製</button></div><pre class="md-code-pre" id="${id}"><code>${escapeHtml(rawCode)}</code></pre></div>`
+    );
+    last = m.index + m[0].length;
+  }
+  const tail = text.slice(last);
+  if (tail.trim()) {
+    parts.push(renderMarkdownFromEscapedBlocks(escapeHtml(tail)));
+  }
+  return parts.join('');
 }
 
 async function callAgentChatApiStream(message: string, onDelta: (chunk: string) => void): Promise<string> {
   if (!firebaseIdToken) {
-    throw new Error("尚未取得 Firebase idToken，請先完成 Google 授權");
+    throw new Error('尚未取得 Firebase idToken，請先完成 Google 授權');
   }
   const response = await fetch(AGENT_CHAT_API, {
-    method: "POST",
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
       Authorization: `Bearer ${firebaseIdToken}`,
-      "x-page-url": globalThis.location?.href || "",
-      Accept: "text/event-stream, application/json, text/plain",
+      'x-page-url': globalThis.location?.href || '',
+      Accept: 'text/event-stream, application/json, text/plain',
     },
     body: JSON.stringify({
       message,
@@ -1610,12 +1842,13 @@ async function callAgentChatApiStream(message: string, onDelta: (chunk: string) 
     return callAgentChatApi(message);
   }
 
-  const contentType = response.headers.get("content-type") || "";
+  const contentType = response.headers.get('content-type') || '';
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
-  let accumulated = "";
-  let buffer = "";
+  let accumulated = '';
+  let buffer = '';
 
+  // eslint-disable-next-line no-constant-condition -- ReadableStream.read() 直到 done
   while (true) {
     const { done, value } = await reader.read();
     if (done) {
@@ -1623,14 +1856,14 @@ async function callAgentChatApiStream(message: string, onDelta: (chunk: string) 
       break;
     }
     buffer += decoder.decode(value, { stream: true });
-    if (contentType.includes("text/event-stream")) {
-      const events = buffer.split("\n\n");
-      buffer = events.pop() || "";
+    if (contentType.includes('text/event-stream')) {
+      const events = buffer.split('\n\n');
+      buffer = events.pop() || '';
       for (const event of events) {
         const { eventType, payloadText } = parseSseBlock(event);
         if (!shouldEmitSseDelta(eventType)) continue;
-        if (!payloadText || payloadText === "[DONE]") continue;
-        let deltaText = "";
+        if (!payloadText || payloadText === '[DONE]') continue;
+        let deltaText = '';
         try {
           deltaText = extractTextFromPayload(JSON.parse(payloadText));
         } catch {
@@ -1645,19 +1878,19 @@ async function callAgentChatApiStream(message: string, onDelta: (chunk: string) 
       if (!buffer) continue;
       accumulated += buffer;
       onDelta(buffer);
-      buffer = "";
+      buffer = '';
     }
   }
 
-  if (contentType.includes("text/event-stream")) {
+  if (contentType.includes('text/event-stream')) {
     const tail = buffer.trim();
-    if (tail && tail !== "[DONE]") {
-      const tailEvents = tail.split("\n\n").filter(Boolean);
+    if (tail && tail !== '[DONE]') {
+      const tailEvents = tail.split('\n\n').filter(Boolean);
       for (const ev of tailEvents) {
         const { eventType, payloadText } = parseSseBlock(ev);
         if (!shouldEmitSseDelta(eventType)) continue;
-        if (!payloadText || payloadText === "[DONE]") continue;
-        let deltaText = "";
+        if (!payloadText || payloadText === '[DONE]') continue;
+        let deltaText = '';
         try {
           deltaText = extractTextFromPayload(JSON.parse(payloadText));
         } catch {
@@ -1689,182 +1922,248 @@ async function callAgentChatApiStream(message: string, onDelta: (chunk: string) 
 function renderMessages(): void {
   chatMessagesEl.replaceChildren();
   if (!messages.length) {
-    const empty = document.createElement("div");
-    empty.className = "empty-tip";
-    empty.textContent = "";
+    const empty = document.createElement('div');
+    empty.className = 'empty-tip';
+    empty.textContent = '尚無訊息。在下方輸入問題後按「送出」即可開始與 Agent 對話。';
     chatMessagesEl.appendChild(empty);
+    chatMessagesEl.classList.remove('chat-messages--streaming');
     return;
   }
 
-  messages.forEach((message) => {
-    const row = document.createElement("div");
+  messages.forEach((message, index) => {
+    const row = document.createElement('div');
     row.className = `message-row ${message.role}`;
+    const isStreamingAssistant = message.role === 'assistant' && index === streamingAssistantIndex;
+    const streamBubbleEmpty = isStreamingAssistant && !message.content.trim();
 
-    const bubble = document.createElement("div");
-    bubble.className = "message-bubble";
-    if (message.role === "assistant") {
-      bubble.classList.add("markdown");
-      bubble.innerHTML = renderAssistantMarkdown(message.content);
+    if (message.role === 'assistant' && index === streamingAssistantIndex) {
+      row.classList.add('message-row--streaming');
+    }
+    if (message.role === 'assistant' && index === streamJustFinishedIndex) {
+      row.classList.add('message-row--stream-done');
+    }
+
+    const bubble = document.createElement('div');
+    bubble.className = 'message-bubble';
+    if (message.role === 'assistant') {
+      bubble.classList.add('markdown');
+      if (streamBubbleEmpty) {
+        bubble.classList.add('message-bubble--stream-wait');
+        const wait = document.createElement('div');
+        wait.className = 'stream-wait-lines';
+        wait.setAttribute('aria-hidden', 'true');
+        for (let i = 0; i < 3; i += 1) {
+          const bar = document.createElement('span');
+          bar.className = 'stream-wait-bar';
+          wait.appendChild(bar);
+        }
+        bubble.appendChild(wait);
+      } else {
+        bubble.innerHTML = renderAssistantMarkdown(message.content);
+      }
+      if (isStreamingAssistant) {
+        const cursor = document.createElement('span');
+        cursor.className = 'assistant-stream-cursor';
+        cursor.setAttribute('aria-hidden', 'true');
+        bubble.appendChild(cursor);
+      }
     } else {
       bubble.textContent = message.content;
     }
 
-    const meta = document.createElement("div");
-    meta.className = "message-meta";
-    meta.textContent = `${message.role === "user" ? "你" : "Agent"} · ${message.at}`;
+    const meta = document.createElement('div');
+    meta.className = 'message-meta';
+    if (message.role === 'assistant' && index === streamingAssistantIndex) {
+      meta.classList.add('message-meta--streaming');
+      const badge = document.createElement('span');
+      badge.className = 'message-meta-badge message-meta-badge--pulse';
+      badge.textContent = 'LIVE';
+      meta.appendChild(badge);
+      meta.appendChild(document.createTextNode(' 正在產生回應'));
+      const typing = document.createElement('span');
+      typing.className = 'typing-indicator';
+      typing.setAttribute('aria-hidden', 'true');
+      for (let i = 0; i < 3; i += 1) {
+        const dot = document.createElement('span');
+        dot.className = 'typing-dot';
+        typing.appendChild(dot);
+      }
+      meta.appendChild(typing);
+    } else if (message.role === 'assistant' && index === streamJustFinishedIndex) {
+      meta.classList.add('message-meta--done');
+      meta.textContent = `Agent · 已回應完畢 · ${message.at}`;
+    } else {
+      meta.textContent = `${message.role === 'user' ? '你' : 'Agent'} · ${message.at}`;
+    }
 
     row.appendChild(bubble);
     row.appendChild(meta);
     chatMessagesEl.appendChild(row);
   });
+  chatMessagesEl.classList.toggle('chat-messages--streaming', streamingAssistantIndex !== null);
   chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
 }
 
 async function loadMessages(): Promise<void> {
+  persistenceReady = false;
   const storageLocal = extensionChrome?.storage?.local;
-  const saved = storageLocal
-    ? await storageLocal.get([
-        STORAGE_KEY,
-        SESSION_ID_KEY,
-        WORKFLOWS_KEY,
-        AUTH_STATE_KEY,
-        CUSTOM_APIS_KEY,
-        EXEC_RESULTS_KEY,
-      ])
-    : {
-        [STORAGE_KEY]: fallbackStorage.get(STORAGE_KEY),
-        [SESSION_ID_KEY]: fallbackStorage.get(SESSION_ID_KEY),
-        [WORKFLOWS_KEY]: fallbackStorage.get(WORKFLOWS_KEY),
-        [AUTH_STATE_KEY]: fallbackStorage.get(AUTH_STATE_KEY),
-        [CUSTOM_APIS_KEY]: fallbackStorage.get(CUSTOM_APIS_KEY),
-        [EXEC_RESULTS_KEY]: fallbackStorage.get(EXEC_RESULTS_KEY),
-      };
-  setAuthStatus("尚未授權，請先按「Google 授權」。", "normal");
-  setChatEnabled(false);
-
-  if (typeof saved[SESSION_ID_KEY] === "string" && saved[SESSION_ID_KEY]) {
-    chatSessionId = saved[SESSION_ID_KEY] as string;
-  }
-
-  if (saved[STORAGE_KEY]) {
-    try {
-      const parsed = JSON.parse(saved[STORAGE_KEY] as string) as unknown[];
-      if (Array.isArray(parsed)) {
-        messages = parsed.slice(-MAX_MESSAGES).filter((item): item is ChatMessage => {
-          return (
-            Boolean(item) &&
-            typeof item === "object" &&
-            (item as ChatMessage).role !== undefined &&
-            typeof (item as ChatMessage).content === "string" &&
-            typeof (item as ChatMessage).at === "string"
-          );
-        });
-      }
-    } catch {
-      messages = [];
-    }
-  }
-  if (saved[WORKFLOWS_KEY]) {
-    try {
-      const parsedWorkflows = JSON.parse(saved[WORKFLOWS_KEY] as string) as Array<SavedWorkflow & { apis?: string[] }>;
-      if (Array.isArray(parsedWorkflows)) {
-        savedWorkflows = parsedWorkflows
-          .filter((item) => Boolean(item) && typeof item === "object")
-          .map((item) => {
-            const legacySteps = Array.isArray(item.apis)
-              ? item.apis
-                  .map((api) => String(api || "").trim())
-                  .filter(Boolean)
-                  .map((api) => ({ api, purpose: "待補充目的", params: [] as string[] }))
-              : [];
-            const steps = Array.isArray(item.steps)
-              ? item.steps
-                  .filter((step) => step && typeof step.api === "string")
-                  .map((step) => ({
-                    api: step.api,
-                    path: typeof step.path === "string" ? step.path : undefined,
-                    requestName: typeof step.requestName === "string" ? step.requestName : undefined,
-                    method: typeof step.method === "string" ? step.method : undefined,
-                    headers:
-                      step.headers && typeof step.headers === "object"
-                        ? { ...(step.headers as Record<string, string>) }
-                        : {},
-                    bodyTemplate: typeof step.bodyTemplate === "string" ? step.bodyTemplate : "",
-                    bearerToken: typeof step.bearerToken === "string" ? step.bearerToken : "",
-                    purpose: typeof step.purpose === "string" ? step.purpose : "待補充目的",
-                    params: Array.isArray(step.params) ? step.params.map((p) => String(p)) : [],
-                  }))
-              : legacySteps;
-            return {
-              id: typeof item.id === "string" ? item.id : `wf-${Date.now()}`,
-              name: typeof item.name === "string" ? item.name : "未命名流程",
-              steps,
-            };
-          });
-      }
-    } catch {
-      savedWorkflows = [];
-    }
-  }
-  if (saved[CUSTOM_APIS_KEY]) {
-    try {
-      const parsedCustomApis = JSON.parse(saved[CUSTOM_APIS_KEY] as string) as ApiSpec[];
-      if (Array.isArray(parsedCustomApis)) {
-        customApiSpecs = parsedCustomApis
-          .filter((item) => item && typeof item.api === "string")
-          .map((item) => ({
-            api: item.api,
-            path: typeof item.path === "string" ? item.path : undefined,
-            requestName: typeof item.requestName === "string" ? item.requestName : undefined,
-            method: typeof item.method === "string" ? item.method : undefined,
-            headers: item.headers && typeof item.headers === "object" ? (item.headers as Record<string, string>) : {},
-            bodyTemplate: typeof item.bodyTemplate === "string" ? item.bodyTemplate : "",
-            bearerToken: typeof item.bearerToken === "string" ? item.bearerToken : "",
-            purpose: typeof item.purpose === "string" ? item.purpose : "",
-            params: Array.isArray(item.params) ? item.params.map((p) => String(p)) : [],
-          }));
-      }
-    } catch {
-      customApiSpecs = [];
-    }
-  }
-  renderMessages();
-  refreshApiCandidatesFromLatestAssistant();
-  renderDraftSteps();
-  renderSavedWorkflows();
-  renderSavedApis();
+  let saved: Record<string, unknown>;
   try {
-    if (typeof saved[EXEC_RESULTS_KEY] === "string" && saved[EXEC_RESULTS_KEY]) {
-      const parsed = JSON.parse(saved[EXEC_RESULTS_KEY] as string) as ExecResult[];
-      if (Array.isArray(parsed)) execResults = parsed.slice(0, MAX_EXEC_RESULTS);
-    }
-  } catch {
-    execResults = [];
+    saved = storageLocal
+      ? await storageLocal.get([
+          STORAGE_KEY,
+          SESSION_ID_KEY,
+          WORKFLOWS_KEY,
+          AUTH_STATE_KEY,
+          CUSTOM_APIS_KEY,
+          EXEC_RESULTS_KEY,
+        ])
+      : {
+          [STORAGE_KEY]: fallbackStorage.get(STORAGE_KEY),
+          [SESSION_ID_KEY]: fallbackStorage.get(SESSION_ID_KEY),
+          [WORKFLOWS_KEY]: fallbackStorage.get(WORKFLOWS_KEY),
+          [AUTH_STATE_KEY]: fallbackStorage.get(AUTH_STATE_KEY),
+          [CUSTOM_APIS_KEY]: fallbackStorage.get(CUSTOM_APIS_KEY),
+          [EXEC_RESULTS_KEY]: fallbackStorage.get(EXEC_RESULTS_KEY),
+        };
+  } catch (err) {
+    console.error('[personal-extension] loadMessages: storage.get failed', err);
+    saved = {};
   }
-  renderExecResults();
+  try {
+    setAuthStatus('尚未授權，請先按「Google 授權」。', 'normal');
+    setChatEnabled(false);
 
-  if (typeof saved[AUTH_STATE_KEY] === "string" && saved[AUTH_STATE_KEY]) {
+    if (typeof saved[SESSION_ID_KEY] === 'string' && saved[SESSION_ID_KEY]) {
+      chatSessionId = saved[SESSION_ID_KEY] as string;
+    }
+
+    if (saved[STORAGE_KEY]) {
+      try {
+        const parsed = JSON.parse(saved[STORAGE_KEY] as string) as unknown[];
+        if (Array.isArray(parsed)) {
+          messages = parsed.slice(-MAX_MESSAGES).filter((item): item is ChatMessage => {
+            return (
+              Boolean(item) &&
+              typeof item === 'object' &&
+              (item as ChatMessage).role !== undefined &&
+              typeof (item as ChatMessage).content === 'string' &&
+              typeof (item as ChatMessage).at === 'string'
+            );
+          });
+        }
+      } catch {
+        messages = [];
+      }
+    }
+    if (saved[WORKFLOWS_KEY]) {
+      try {
+        const parsedWorkflows = JSON.parse(saved[WORKFLOWS_KEY] as string) as Array<
+          SavedWorkflow & { apis?: string[] }
+        >;
+        if (Array.isArray(parsedWorkflows)) {
+          savedWorkflows = parsedWorkflows
+            .filter((item) => Boolean(item) && typeof item === 'object')
+            .map((item) => {
+              const legacySteps = Array.isArray(item.apis)
+                ? item.apis
+                    .map((api) => String(api || '').trim())
+                    .filter(Boolean)
+                    .map((api) => ({ api, purpose: '待補充目的', params: [] as string[] }))
+                : [];
+              const steps = Array.isArray(item.steps)
+                ? item.steps
+                    .filter((step) => step && typeof step.api === 'string')
+                    .map((step) => ({
+                      api: step.api,
+                      path: typeof step.path === 'string' ? step.path : undefined,
+                      requestName: typeof step.requestName === 'string' ? step.requestName : undefined,
+                      method: typeof step.method === 'string' ? step.method : undefined,
+                      headers:
+                        step.headers && typeof step.headers === 'object'
+                          ? { ...(step.headers as Record<string, string>) }
+                          : {},
+                      bodyTemplate: typeof step.bodyTemplate === 'string' ? step.bodyTemplate : '',
+                      bearerToken: typeof step.bearerToken === 'string' ? step.bearerToken : '',
+                      purpose: typeof step.purpose === 'string' ? step.purpose : '待補充目的',
+                      params: Array.isArray(step.params) ? step.params.map((p) => String(p)) : [],
+                    }))
+                : legacySteps;
+              return {
+                id: typeof item.id === 'string' ? item.id : `wf-${Date.now()}`,
+                name: typeof item.name === 'string' ? item.name : '未命名流程',
+                steps,
+              };
+            });
+        }
+      } catch {
+        savedWorkflows = [];
+      }
+    }
+    if (saved[CUSTOM_APIS_KEY]) {
+      try {
+        const parsedCustomApis = JSON.parse(saved[CUSTOM_APIS_KEY] as string) as ApiSpec[];
+        if (Array.isArray(parsedCustomApis)) {
+          customApiSpecs = parsedCustomApis
+            .filter((item) => item && typeof item.api === 'string')
+            .map((item) => ({
+              api: item.api,
+              path: typeof item.path === 'string' ? item.path : undefined,
+              requestName: typeof item.requestName === 'string' ? item.requestName : undefined,
+              method: typeof item.method === 'string' ? item.method : undefined,
+              headers: item.headers && typeof item.headers === 'object' ? (item.headers as Record<string, string>) : {},
+              bodyTemplate: typeof item.bodyTemplate === 'string' ? item.bodyTemplate : '',
+              bearerToken: typeof item.bearerToken === 'string' ? item.bearerToken : '',
+              purpose: typeof item.purpose === 'string' ? item.purpose : '',
+              params: Array.isArray(item.params) ? item.params.map((p) => String(p)) : [],
+            }));
+        }
+      } catch {
+        customApiSpecs = [];
+      }
+    }
+    renderMessages();
+    refreshApiCandidatesFromLatestAssistant();
+    renderDraftSteps();
+    renderSavedWorkflows();
+    renderSavedApis();
+    try {
+      if (typeof saved[EXEC_RESULTS_KEY] === 'string' && saved[EXEC_RESULTS_KEY]) {
+        const parsed = JSON.parse(saved[EXEC_RESULTS_KEY] as string) as ExecResult[];
+        if (Array.isArray(parsed)) execResults = parsed.slice(0, MAX_EXEC_RESULTS);
+      }
+    } catch {
+      execResults = [];
+    }
+    renderExecResults();
+  } catch (err) {
+    console.error('[personal-extension] loadMessages: restore UI failed', err);
+  } finally {
+    persistenceReady = true;
+  }
+
+  if (typeof saved[AUTH_STATE_KEY] === 'string' && saved[AUTH_STATE_KEY]) {
     try {
       const parsed = JSON.parse(saved[AUTH_STATE_KEY] as string) as AuthState;
       if (isAuthStateValid(parsed)) {
-        const storedEmail = parsed.accountEmail || "";
+        const storedEmail = parsed.accountEmail || '';
         if (!isAllowedAiiiEmail(storedEmail)) {
           clearAuthStateInMemory();
           await saveMessages();
           setAuthStatus(
-            "此擴充僅限  公司 Google 帳號。已清除不符合網域的授權資料，請改用公司帳號授權。",
-            "error",
+            '此擴充僅限  公司 Google 帳號。已清除不符合網域的授權資料，請改用公司帳號授權。',
+            'error'
           );
-          setOAuthInfo(storedEmail ? `先前帳號：${storedEmail}` : "先前授權無有效信箱");
-          setToast("僅限  帳號可使用本擴充。", "error", 8000);
+          setOAuthInfo(storedEmail ? `先前帳號：${storedEmail}` : '先前授權無有效信箱');
+          setToast('僅限  帳號可使用本擴充。', 'error', 8000);
         } else {
           firebaseIdToken = parsed.firebaseIdToken;
           googleAccessToken = parsed.googleAccessToken;
           authExpiresAt = parsed.expiresAt;
-          accountEmail = storedEmail || "(無法取得 email)";
+          accountEmail = storedEmail || '(無法取得 email)';
           isAuthorized = true;
           setChatEnabled(true);
-          setAuthStatus(`已授權（${accountEmail}）`, "ok");
+          setAuthStatus(`已授權（${accountEmail}）`, 'ok');
           setOAuthInfo(`account_email: ${accountEmail}`);
           return;
         }
@@ -1876,15 +2175,16 @@ async function loadMessages(): Promise<void> {
 
   const identityInfo = await checkIdentityAuthorization();
   if (identityInfo.authorized) {
-    setAuthStatus(`${identityInfo.message}，但 Token 已過期，請重新授權。`, "normal");
+    setAuthStatus(`${identityInfo.message}，但 Token 已過期，請重新授權。`, 'normal');
   } else if (identityInfo.domainNotAllowed) {
-    setAuthStatus(identityInfo.message, "error");
+    setAuthStatus(identityInfo.message, 'error');
     setOAuthInfo(identityInfo.message);
   }
   syncPanelBodyAuthLock();
 }
 
 async function saveMessages(): Promise<void> {
+  if (!persistenceReady) return;
   const data = {
     [STORAGE_KEY]: JSON.stringify(messages.slice(-MAX_MESSAGES)),
     [SESSION_ID_KEY]: chatSessionId,
@@ -1895,19 +2195,19 @@ async function saveMessages(): Promise<void> {
   };
   const storageLocal = extensionChrome?.storage?.local;
   if (storageLocal) return storageLocal.set(data);
-  fallbackStorage.set(STORAGE_KEY, data[STORAGE_KEY] ?? "");
-  fallbackStorage.set(SESSION_ID_KEY, data[SESSION_ID_KEY] ?? "");
-  fallbackStorage.set(WORKFLOWS_KEY, data[WORKFLOWS_KEY] ?? "");
-  fallbackStorage.set(AUTH_STATE_KEY, data[AUTH_STATE_KEY] ?? "");
-  fallbackStorage.set(CUSTOM_APIS_KEY, data[CUSTOM_APIS_KEY] ?? "");
-  fallbackStorage.set(EXEC_RESULTS_KEY, data[EXEC_RESULTS_KEY] ?? "");
+  fallbackStorage.set(STORAGE_KEY, data[STORAGE_KEY] ?? '');
+  fallbackStorage.set(SESSION_ID_KEY, data[SESSION_ID_KEY] ?? '');
+  fallbackStorage.set(WORKFLOWS_KEY, data[WORKFLOWS_KEY] ?? '');
+  fallbackStorage.set(AUTH_STATE_KEY, data[AUTH_STATE_KEY] ?? '');
+  fallbackStorage.set(CUSTOM_APIS_KEY, data[CUSTOM_APIS_KEY] ?? '');
+  fallbackStorage.set(EXEC_RESULTS_KEY, data[EXEC_RESULTS_KEY] ?? '');
 }
 
 function pushMessage(role: ChatRole, content: string): number {
   messages.push({
     role,
     content,
-    at: new Date().toLocaleTimeString("zh-Hant-TW", { hour: "2-digit", minute: "2-digit" }),
+    at: new Date().toLocaleTimeString('zh-Hant-TW', { hour: '2-digit', minute: '2-digit' }),
   });
   messages = messages.slice(-MAX_MESSAGES);
   renderMessages();
@@ -1928,7 +2228,7 @@ function checkIdentityAuthorization(): Promise<{
 }> {
   return new Promise((resolve) => {
     if (!extensionChrome?.identity?.getProfileUserInfo) {
-      resolve({ authorized: false, message: "目前環境不支援 chrome.identity" });
+      resolve({ authorized: false, message: '目前環境不支援 chrome.identity' });
       return;
     }
     extensionChrome.identity.getProfileUserInfo((userInfo) => {
@@ -1938,7 +2238,7 @@ function checkIdentityAuthorization(): Promise<{
         return;
       }
       if (!userInfo?.email) {
-        resolve({ authorized: false, message: "尚未完成 OAuth 授權，請按「Google 授權」" });
+        resolve({ authorized: false, message: '尚未完成 OAuth 授權，請按「Google 授權」' });
         return;
       }
       if (!isAllowedAiiiEmail(userInfo.email)) {
@@ -1957,18 +2257,18 @@ function checkIdentityAuthorization(): Promise<{
 function requestOAuthAuthorization(): Promise<OAuthGrantInfo> {
   return new Promise((resolve, reject) => {
     if (!extensionChrome?.identity?.launchWebAuthFlow || !extensionChrome?.identity?.getRedirectURL) {
-      reject(new Error("目前環境不支援 chrome.identity.launchWebAuthFlow"));
+      reject(new Error('目前環境不支援 chrome.identity.launchWebAuthFlow'));
       return;
     }
-    const redirectUri = extensionChrome.identity.getRedirectURL("oauth2");
-    const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-    authUrl.searchParams.set("client_id", GOOGLE_OAUTH_CLIENT_ID);
-    authUrl.searchParams.set("response_type", "token");
-    authUrl.searchParams.set("redirect_uri", redirectUri);
-    authUrl.searchParams.set("scope", GOOGLE_OAUTH_SCOPE);
-    authUrl.searchParams.set("prompt", "select_account");
+    const redirectUri = extensionChrome.identity.getRedirectURL('oauth2');
+    const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+    authUrl.searchParams.set('client_id', GOOGLE_OAUTH_CLIENT_ID);
+    authUrl.searchParams.set('response_type', 'token');
+    authUrl.searchParams.set('redirect_uri', redirectUri);
+    authUrl.searchParams.set('scope', GOOGLE_OAUTH_SCOPE);
+    authUrl.searchParams.set('prompt', 'select_account');
     const oauthState = createOAuthState();
-    authUrl.searchParams.set("state", oauthState);
+    authUrl.searchParams.set('state', oauthState);
 
     extensionChrome.identity.launchWebAuthFlow(
       { url: authUrl.toString(), interactive: true },
@@ -1979,94 +2279,73 @@ function requestOAuthAuthorization(): Promise<OAuthGrantInfo> {
           return;
         }
         if (!responseUrl) {
-          reject(new Error("授權流程未回傳 response URL"));
+          reject(new Error('授權流程未回傳 response URL'));
           return;
         }
-        const hash = responseUrl.split("#")[1] || "";
+        const hash = responseUrl.split('#')[1] || '';
         const params = new URLSearchParams(hash);
-        const returnedState = params.get("state");
+        const returnedState = params.get('state');
         if (!returnedState || returnedState !== oauthState) {
-          reject(new Error("OAuth state 驗證失敗，可能存在請求偽造風險"));
+          reject(new Error('OAuth state 驗證失敗，可能存在請求偽造風險'));
           return;
         }
-        const accessToken = params.get("access_token");
+        const accessToken = params.get('access_token');
         if (!accessToken) {
-          const error = params.get("error");
-          const errorDescription = params.get("error_description");
-          reject(new Error(`OAuth 未取得 access token: ${error || "unknown"} ${errorDescription || ""}`.trim()));
+          const error = params.get('error');
+          const errorDescription = params.get('error_description');
+          reject(new Error(`OAuth 未取得 access token: ${error || 'unknown'} ${errorDescription || ''}`.trim()));
           return;
         }
         resolve({
           accessToken,
-          expiresIn: params.get("expires_in") || "(unknown)",
-          scope: params.get("scope") || "(unknown)",
-          tokenType: params.get("token_type") || "(unknown)",
+          expiresIn: params.get('expires_in') || '(unknown)',
+          scope: params.get('scope') || '(unknown)',
+          tokenType: params.get('token_type') || '(unknown)',
           redirectUri,
         });
-      },
+      }
     );
   });
 }
 
-function getBrowserGoogleProfile(): Promise<{ email: string; id: string }> {
-  return new Promise((resolve, reject) => {
-    if (!extensionChrome?.identity?.getProfileUserInfo) {
-      reject(new Error("目前環境不支援 chrome.identity.getProfileUserInfo"));
-      return;
-    }
-    extensionChrome.identity.getProfileUserInfo((userInfo) => {
-      console.log("[personal-extension] getBrowserGoogleProfile", userInfo);
-      const maybeError = extensionChrome?.runtime?.lastError?.message;
-      if (maybeError) {
-        reject(new Error(maybeError));
-        return;
-      }
-      resolve({
-        email: userInfo?.email || "(未提供 email)",
-        id: userInfo?.id || "(未提供 id)",
-      });
-    });
-  });
-}
-
 async function authorizeNow(): Promise<void> {
-  setAuthStatus("正在進行 Google OAuth 授權...", "normal");
+  setAuthStatus('正在進行 Google OAuth 授權...', 'normal');
   try {
     const grant = await requestOAuthAuthorization();
-    let resolvedEmail = "(無法取得 email)";
+    let resolvedEmail = '(無法取得 email)';
     try {
       const userInfo = await fetchGoogleUserInfo(grant.accessToken);
       if (userInfo.email) resolvedEmail = userInfo.email;
     } catch (error) {
-      console.log("[personal-extension] userinfoError", error);
+      console.log('[personal-extension] userinfoError', error);
     }
     if (!isAllowedAiiiEmail(resolvedEmail)) {
       clearAuthStateInMemory();
       setChatEnabled(false);
       await saveMessages();
       const detail =
-        resolvedEmail !== "(無法取得 email)"
+        resolvedEmail !== '(無法取得 email)'
           ? `目前 Google 帳號為 ${resolvedEmail}，僅限 ${ALLOWED_GOOGLE_EMAIL_SUFFIX} 可使用本擴充。`
           : `無法取得授權信箱，或信箱非 ${ALLOWED_GOOGLE_EMAIL_SUFFIX}。請確認已使用公司帳號登入 Google。`;
-      setAuthStatus(detail, "error");
+      setAuthStatus(detail, 'error');
       setOAuthInfo(detail);
-      setToast(`僅限 ${ALLOWED_GOOGLE_EMAIL_SUFFIX} 帳號`, "error", 8000);
+      setToast(`僅限 ${ALLOWED_GOOGLE_EMAIL_SUFFIX} 帳號`, 'error', 8000);
       return;
     }
     googleAccessToken = grant.accessToken;
     accountEmail = resolvedEmail;
     firebaseIdToken = await exchangeGoogleTokenForFirebaseIdToken(grant.accessToken);
-    const expiresInSeconds = Number.parseInt(grant.expiresIn || "", 10);
+    const expiresInSeconds = Number.parseInt(grant.expiresIn || '', 10);
     const safeTtlMs = Number.isFinite(expiresInSeconds) && expiresInSeconds > 0 ? expiresInSeconds * 1000 : 3600 * 1000;
     // 提前 60 秒視為到期，避免邊界時間觸發 401。
     authExpiresAt = Date.now() + safeTtlMs - 60_000;
-    setAuthStatus("OAuth 授權成功。", "ok");
+    setAuthStatus('OAuth 授權成功。', 'ok');
     setOAuthInfo(`account_email: ${accountEmail}`);
-    setAuthStatus(`OAuth 授權成功（${accountEmail}）`, "ok");
+    setAuthStatus(`OAuth 授權成功（${accountEmail}）`, 'ok');
     isAuthorized = true;
     setChatEnabled(true);
     await saveMessages();
-    console.log("[personal-extension] oauthGrant", {
+    console.log('[personal-extension] oauthGrant', {
       ...grant,
       accountEmail,
       accessToken: maskToken(grant.accessToken),
@@ -2075,68 +2354,68 @@ async function authorizeNow(): Promise<void> {
     clearAuthStateInMemory();
     setChatEnabled(false);
     await saveMessages();
-    const message = error instanceof Error ? error.message : "未知錯誤";
-    setAuthStatus(`OAuth 授權失敗：${message}`, "error");
+    const message = error instanceof Error ? error.message : '未知錯誤';
+    setAuthStatus(`OAuth 授權失敗：${message}`, 'error');
     setOAuthInfo(`OAuth 授權失敗：${message}`);
-    console.log("[personal-extension] oauthAuthorizeError", message);
+    console.log('[personal-extension] oauthAuthorizeError', message);
   }
 }
 
 // ===== 執行流程與結果渲染 =====
-const STEP_LETTERS = "abcdefghijklmnopqrstuvwxyz";
+const STEP_LETTERS = 'abcdefghijklmnopqrstuvwxyz';
 
 function renderExecResults(): void {
   executionResultListEl.replaceChildren();
   execResults.forEach((result) => {
-    const block = document.createElement("div");
-    block.className = "exec-workflow-block";
-    const toggle = document.createElement("button");
-    toggle.type = "button";
-    toggle.className = "exec-workflow-toggle";
-    toggle.textContent = `${result.ok ? "✅" : "❌"} ▾  【${result.workflowName}】${result.timestamp}`;
-    const stepsWrap = document.createElement("div");
-    stepsWrap.className = "exec-workflow-steps collapsed";
-    toggle.addEventListener("click", () => {
-      const collapsed = stepsWrap.classList.toggle("collapsed");
-      toggle.textContent = `${result.ok ? "✅" : "❌"} ${collapsed ? "▸" : "▾"}  【${result.workflowName}】${result.timestamp}`;
+    const block = document.createElement('div');
+    block.className = 'exec-workflow-block';
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'exec-workflow-toggle';
+    toggle.textContent = `${result.ok ? '✅' : '❌'} ▾  【${result.workflowName}】${result.timestamp}`;
+    const stepsWrap = document.createElement('div');
+    stepsWrap.className = 'exec-workflow-steps collapsed';
+    toggle.addEventListener('click', () => {
+      const collapsed = stepsWrap.classList.toggle('collapsed');
+      toggle.textContent = `${result.ok ? '✅' : '❌'} ${collapsed ? '▸' : '▾'}  【${result.workflowName}】${result.timestamp}`;
     });
     result.steps.forEach((s) => {
-      const row = document.createElement("div");
-      row.className = `exec-step-row ${s.ok ? "ok" : "error"}`;
-      const left = document.createElement("div");
-      left.className = "exec-step-left";
-      const icon = document.createElement("span");
-      icon.className = "exec-step-icon";
-      icon.textContent = s.ok ? "✅" : "❌";
-      const label = document.createElement("span");
-      label.className = "exec-step-label";
+      const row = document.createElement('div');
+      row.className = `exec-step-row ${s.ok ? 'ok' : 'error'}`;
+      const left = document.createElement('div');
+      left.className = 'exec-step-left';
+      const icon = document.createElement('span');
+      icon.className = 'exec-step-icon';
+      icon.textContent = s.ok ? '✅' : '❌';
+      const label = document.createElement('span');
+      label.className = 'exec-step-label';
       label.textContent = `${s.index + 1}. ${s.name}`;
-      const statusText = document.createElement("span");
-      statusText.className = "exec-step-status-text";
+      const statusText = document.createElement('span');
+      statusText.className = 'exec-step-status-text';
       statusText.textContent = s.statusText;
       left.appendChild(icon);
       left.appendChild(label);
       left.appendChild(statusText);
-      const actions = document.createElement("div");
-      actions.className = "exec-step-actions";
+      const actions = document.createElement('div');
+      actions.className = 'exec-step-actions';
       if (s.response) {
-        const viewBtn = document.createElement("button");
-        viewBtn.type = "button";
-        viewBtn.className = "exec-view-btn";
-        viewBtn.textContent = "查看結果";
-        const pre = document.createElement("pre");
-        pre.className = "exec-step-response hidden";
+        const viewBtn = document.createElement('button');
+        viewBtn.type = 'button';
+        viewBtn.className = 'exec-view-btn';
+        viewBtn.textContent = '查看結果';
+        const pre = document.createElement('pre');
+        pre.className = 'exec-step-response hidden';
         pre.textContent = s.response;
-        viewBtn.addEventListener("click", () => {
-          pre.classList.toggle("hidden");
-          viewBtn.textContent = pre.classList.contains("hidden") ? "查看結果" : "收起";
+        viewBtn.addEventListener('click', () => {
+          pre.classList.toggle('hidden');
+          viewBtn.textContent = pre.classList.contains('hidden') ? '查看結果' : '收起';
         });
-        const copyBtn = document.createElement("button");
-        copyBtn.type = "button";
-        copyBtn.className = "exec-copy-btn";
-        copyBtn.textContent = "複製";
-        copyBtn.addEventListener("click", () => {
-          copyToClipboard(s.response ?? "", copyBtn);
+        const copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.className = 'exec-copy-btn';
+        copyBtn.textContent = '複製';
+        copyBtn.addEventListener('click', () => {
+          copyToClipboard(s.response ?? '', copyBtn);
         });
         actions.appendChild(copyBtn);
         actions.appendChild(viewBtn);
@@ -2157,7 +2436,7 @@ function renderExecResults(): void {
 
 function createExecStepRow(
   index: number,
-  step: WorkflowStep,
+  step: WorkflowStep
 ): {
   row: HTMLDivElement;
   icon: HTMLSpanElement;
@@ -2166,78 +2445,78 @@ function createExecStepRow(
   copyBtn: HTMLButtonElement;
   responsePre: HTMLPreElement;
 } {
-  const row = document.createElement("div");
-  row.className = "exec-step-row";
-  const left = document.createElement("div");
-  left.className = "exec-step-left";
-  const icon = document.createElement("span");
-  icon.className = "exec-step-icon running";
-  icon.textContent = "⏳";
-  const label = document.createElement("span");
-  label.className = "exec-step-label";
+  const row = document.createElement('div');
+  row.className = 'exec-step-row';
+  const left = document.createElement('div');
+  left.className = 'exec-step-left';
+  const icon = document.createElement('span');
+  icon.className = 'exec-step-icon running';
+  icon.textContent = '⏳';
+  const label = document.createElement('span');
+  label.className = 'exec-step-label';
   const letter = STEP_LETTERS[index] ?? String(index + 1);
   label.textContent = `${letter}. ${step.requestName || step.api}`;
-  const statusText = document.createElement("span");
-  statusText.className = "exec-step-status-text";
-  statusText.textContent = "等待中";
+  const statusText = document.createElement('span');
+  statusText.className = 'exec-step-status-text';
+  statusText.textContent = '等待中';
   left.appendChild(icon);
   left.appendChild(label);
   left.appendChild(statusText);
-  const viewBtn = document.createElement("button");
-  viewBtn.type = "button";
-  viewBtn.className = "exec-view-btn hidden";
-  viewBtn.textContent = "查看結果";
-  const responseBlock = document.createElement("div");
-  responseBlock.className = "exec-step-response hidden";
-  const responsePre = document.createElement("pre");
+  const viewBtn = document.createElement('button');
+  viewBtn.type = 'button';
+  viewBtn.className = 'exec-view-btn hidden';
+  viewBtn.textContent = '查看結果';
+  const responseBlock = document.createElement('div');
+  responseBlock.className = 'exec-step-response hidden';
+  const responsePre = document.createElement('pre');
   responseBlock.appendChild(responsePre);
-  viewBtn.addEventListener("click", () => {
-    const isHidden = responseBlock.classList.toggle("hidden");
-    viewBtn.textContent = isHidden ? "查看結果" : "收起";
+  viewBtn.addEventListener('click', () => {
+    const isHidden = responseBlock.classList.toggle('hidden');
+    viewBtn.textContent = isHidden ? '查看結果' : '收起';
   });
-  const copyBtn = document.createElement("button");
-  copyBtn.type = "button";
-  copyBtn.className = "exec-copy-btn hidden";
-  copyBtn.textContent = "複製";
-  copyBtn.addEventListener("click", () => {
-    copyToClipboard(responsePre.textContent ?? "", copyBtn);
+  const copyBtn = document.createElement('button');
+  copyBtn.type = 'button';
+  copyBtn.className = 'exec-copy-btn hidden';
+  copyBtn.textContent = '複製';
+  copyBtn.addEventListener('click', () => {
+    copyToClipboard(responsePre.textContent ?? '', copyBtn);
   });
-  const saveApiBtn = document.createElement("button");
-  saveApiBtn.type = "button";
-  saveApiBtn.className = "exec-save-api-btn";
-  saveApiBtn.textContent = "儲存 API";
-  saveApiBtn.addEventListener("click", () => {
+  const saveApiBtn = document.createElement('button');
+  saveApiBtn.type = 'button';
+  saveApiBtn.className = 'exec-save-api-btn';
+  saveApiBtn.textContent = '儲存 API';
+  saveApiBtn.addEventListener('click', () => {
     const cleanedHeaders: Record<string, string> = {};
     for (const [k, v] of Object.entries(step.headers ?? {})) {
-      if (k.toLowerCase() !== "authorization") cleanedHeaders[k] = v;
+      if (k.toLowerCase() !== 'authorization') cleanedHeaders[k] = v;
     }
     const alreadyExists = customApiSpecs.some(
-      (s) => s.path === (step.path || step.api) && s.requestName === step.requestName,
+      (s) => s.path === (step.path || step.api) && s.requestName === step.requestName
     );
     if (alreadyExists) {
-      setToast(`「${step.requestName || step.api}」已在已儲存的 API 中。`, "error");
+      setToast(`「${step.requestName || step.api}」已在已儲存的 API 中。`, 'error');
       return;
     }
     customApiSpecs.push({
-      api: step.api || step.path || "",
+      api: step.api || step.path || '',
       path: step.path,
       requestName: step.requestName,
       method: step.method,
       headers: cleanedHeaders,
       bodyTemplate: step.bodyTemplate,
-      purpose: step.purpose ?? "",
+      purpose: step.purpose ?? '',
       params: [...(step.params ?? [])],
     });
     renderSavedApis();
     renderApiCandidates();
     setSavedApisOpen(true);
-    saveApiBtn.textContent = "已儲存 ✓";
+    saveApiBtn.textContent = '已儲存 ✓';
     saveApiBtn.disabled = true;
-    setToast(`已儲存 API：${step.requestName || step.api}`, "ok");
+    setToast(`已儲存 API：${step.requestName || step.api}`, 'ok');
     void saveMessages();
   });
-  const rowActions = document.createElement("div");
-  rowActions.className = "exec-step-actions";
+  const rowActions = document.createElement('div');
+  rowActions.className = 'exec-step-actions';
   rowActions.appendChild(saveApiBtn);
   rowActions.appendChild(copyBtn);
   rowActions.appendChild(viewBtn);
@@ -2249,7 +2528,7 @@ function createExecStepRow(
 
 async function executeDraftWorkflow(): Promise<void> {
   if (!draftSteps.length) {
-    setToast("流程草稿是空的，請先加入 API 步驟。", "error");
+    setToast('流程草稿是空的，請先加入 API 步驟。', 'error');
     return;
   }
   if (isAuthExpired()) {
@@ -2257,20 +2536,20 @@ async function executeDraftWorkflow(): Promise<void> {
     return;
   }
   const workflowName = getDraftWorkflowDisplayName();
-  const timestamp = new Date().toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" });
+  const timestamp = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
 
   // Build workflow result block
-  const block = document.createElement("div");
-  block.className = "exec-workflow-block";
-  const toggle = document.createElement("button");
-  toggle.type = "button";
-  toggle.className = "exec-workflow-toggle";
+  const block = document.createElement('div');
+  block.className = 'exec-workflow-block';
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'exec-workflow-toggle';
   toggle.textContent = `▾  【${workflowName}】${timestamp}`;
-  const stepsWrap = document.createElement("div");
-  stepsWrap.className = "exec-workflow-steps";
-  toggle.addEventListener("click", () => {
-    const collapsed = stepsWrap.classList.toggle("collapsed");
-    toggle.textContent = `${collapsed ? "▸" : "▾"}  【${workflowName}】${timestamp}`;
+  const stepsWrap = document.createElement('div');
+  stepsWrap.className = 'exec-workflow-steps';
+  toggle.addEventListener('click', () => {
+    const collapsed = stepsWrap.classList.toggle('collapsed');
+    toggle.textContent = `${collapsed ? '▸' : '▾'}  【${workflowName}】${timestamp}`;
   });
   block.appendChild(toggle);
   block.appendChild(stepsWrap);
@@ -2287,79 +2566,79 @@ async function executeDraftWorkflow(): Promise<void> {
   while (executionResultListEl.children.length > MAX_EXEC_RESULTS) {
     executionResultListEl.lastElementChild?.remove();
   }
-  executionResultPanelEl.classList.remove("collapsed");
-  toggleExecutionResultButton.textContent = "執行結果 ▾";
+  executionResultPanelEl.classList.remove('collapsed');
+  toggleExecutionResultButton.textContent = '執行結果 ▾';
 
   let allOk = true;
   for (let i = 0; i < draftSteps.length; i += 1) {
     const step = draftSteps[i];
     const ui = stepUIs[i];
-    ui.icon.textContent = "⏳";
-    ui.icon.className = "exec-step-icon running";
-    ui.statusText.textContent = "執行中…";
-    ui.row.className = "exec-step-row";
+    ui.icon.textContent = '⏳';
+    ui.icon.className = 'exec-step-icon running';
+    ui.statusText.textContent = '執行中…';
+    ui.row.className = 'exec-step-row';
 
     const url = step.path || step.api;
-    const method = (step.method || "GET").toUpperCase();
+    const method = (step.method || 'GET').toUpperCase();
     const baseHeaders: Record<string, string> = { ...(step.headers || {}) };
     for (const k of Object.keys(baseHeaders)) {
-      if (k.toLowerCase() === "authorization") delete baseHeaders[k];
+      if (k.toLowerCase() === 'authorization') delete baseHeaders[k];
     }
-    const contentType = baseHeaders["content-type"] ?? baseHeaders["Content-Type"] ?? "application/json";
-    delete baseHeaders["content-type"];
+    const contentType = baseHeaders['content-type'] ?? baseHeaders['Content-Type'] ?? 'application/json';
+    delete baseHeaders['content-type'];
     const headers: Record<string, string> = {
       ...baseHeaders,
       Authorization: `Bearer ${firebaseIdToken}`,
-      "Content-Type": contentType,
+      'Content-Type': contentType,
     };
-    const hasBody = !!step.bodyTemplate && ["POST", "PUT", "PATCH"].includes(method);
+    const hasBody = !!step.bodyTemplate && ['POST', 'PUT', 'PATCH'].includes(method);
     try {
       const resp = await fetch(url, {
         method,
         headers,
         ...(hasBody ? { body: step.bodyTemplate } : {}),
       });
-      const ct = resp.headers.get("content-type") ?? "";
+      const ct = resp.headers.get('content-type') ?? '';
       let resultText: string;
-      if (ct.includes("application/json")) {
+      if (ct.includes('application/json')) {
         const json = (await resp.json()) as unknown;
         resultText = JSON.stringify(json, null, 2);
       } else {
         resultText = await resp.text();
       }
       if (resp.ok) {
-        ui.icon.textContent = "✅";
-        ui.icon.className = "exec-step-icon";
+        ui.icon.textContent = '✅';
+        ui.icon.className = 'exec-step-icon';
         ui.statusText.textContent = `${resp.status}`;
-        ui.row.classList.add("ok");
+        ui.row.classList.add('ok');
       } else {
         if (resp.status === 401 || resp.status === 403) {
           notifyAuthExpired();
         }
-        ui.icon.textContent = "❌";
-        ui.icon.className = "exec-step-icon";
+        ui.icon.textContent = '❌';
+        ui.icon.className = 'exec-step-icon';
         ui.statusText.textContent = `${resp.status} 失敗`;
-        ui.row.classList.add("error");
+        ui.row.classList.add('error');
         allOk = false;
       }
       ui.responsePre.textContent = resultText;
-      ui.viewBtn.classList.remove("hidden");
-      ui.copyBtn.classList.remove("hidden");
+      ui.viewBtn.classList.remove('hidden');
+      ui.copyBtn.classList.remove('hidden');
     } catch (error) {
-      const message = error instanceof Error ? error.message : "未知錯誤";
-      ui.icon.textContent = "❌";
-      ui.icon.className = "exec-step-icon";
-      ui.statusText.textContent = "網路錯誤";
-      ui.row.classList.add("error");
+      const message = error instanceof Error ? error.message : '未知錯誤';
+      ui.icon.textContent = '❌';
+      ui.icon.className = 'exec-step-icon';
+      ui.statusText.textContent = '網路錯誤';
+      ui.row.classList.add('error');
       ui.responsePre.textContent = message;
-      ui.viewBtn.classList.remove("hidden");
-      ui.copyBtn.classList.remove("hidden");
+      ui.viewBtn.classList.remove('hidden');
+      ui.copyBtn.classList.remove('hidden');
       allOk = false;
       break;
     }
   }
-  toggle.textContent = `${allOk ? "✅" : "❌"} ▾  【${workflowName}】${timestamp}`;
-  setToast(allOk ? "流程已全部執行成功 ✅" : "流程執行完成，部分步驟失敗 ❌", allOk ? "ok" : "error");
+  toggle.textContent = `${allOk ? '✅' : '❌'} ▾  【${workflowName}】${timestamp}`;
+  setToast(allOk ? '流程已全部執行成功 ✅' : '流程執行完成，部分步驟失敗 ❌', allOk ? 'ok' : 'error');
   // Persist result
   const resultRecord: ExecResult = {
     workflowName,
@@ -2368,9 +2647,9 @@ async function executeDraftWorkflow(): Promise<void> {
     steps: draftSteps.map((step, i) => ({
       index: i,
       name: step.requestName || step.api || step.path || `步驟 ${i + 1}`,
-      ok: stepUIs[i].row.classList.contains("ok"),
-      statusText: stepUIs[i].statusText.textContent || "",
-      response: stepUIs[i].responsePre.textContent || "",
+      ok: stepUIs[i].row.classList.contains('ok'),
+      statusText: stepUIs[i].statusText.textContent || '',
+      response: stepUIs[i].responsePre.textContent || '',
     })),
   };
   execResults.unshift(resultRecord);
@@ -2379,11 +2658,11 @@ async function executeDraftWorkflow(): Promise<void> {
   // Re-open the first (latest) block
   const firstBlock = executionResultListEl.firstElementChild;
   if (firstBlock) {
-    const firstSteps = firstBlock.querySelector(".exec-workflow-steps");
-    const firstToggleEl = firstBlock.querySelector(".exec-workflow-toggle");
+    const firstSteps = firstBlock.querySelector('.exec-workflow-steps');
+    const firstToggleEl = firstBlock.querySelector('.exec-workflow-toggle');
     if (firstSteps && firstToggleEl) {
-      firstSteps.classList.remove("collapsed");
-      firstToggleEl.textContent = `${allOk ? "✅" : "❌"} ▾  【${workflowName}】${timestamp}`;
+      firstSteps.classList.remove('collapsed');
+      firstToggleEl.textContent = `${allOk ? '✅' : '❌'} ▾  【${workflowName}】${timestamp}`;
     }
   }
   await saveMessages();
@@ -2392,30 +2671,54 @@ async function executeDraftWorkflow(): Promise<void> {
 async function sendChatMessage(rawMessage: string, useSkill: boolean): Promise<void> {
   const value = rawMessage.trim();
   if (!value) return;
+  if (streamingAssistantIndex !== null) return;
+  clearStreamJustFinishedTimer();
+  streamJustFinishedIndex = null;
+
   const messageForAgent = buildMessageWithSkillDirective(value, useSkill);
-  pushMessage("user", value);
-  chatInputEl.value = "";
-  const assistantIndex = pushMessage("assistant", "");
+  pushMessage('user', value);
+  chatInputEl.value = '';
+  const assistantIndex = pushMessage('assistant', '');
+  streamingAssistantIndex = assistantIndex;
+  renderMessages();
+
   try {
     const fullText = await callAgentChatApiStream(messageForAgent, (chunk) => {
       appendToMessage(assistantIndex, chunk);
     });
     if (!messages[assistantIndex]?.content.trim()) {
-      messages[assistantIndex].content = fullText || "(無回應內容)";
+      messages[assistantIndex].content = fullText || '(無回應內容)';
       renderMessages();
       refreshApiCandidatesFromLatestAssistant();
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : "未知錯誤";
+    const message = error instanceof Error ? error.message : '未知錯誤';
     messages[assistantIndex].content = `呼叫 Agent API 失敗：${message}`;
     renderMessages();
-    setToast(`呼叫失敗：${message}`, "error");
+    setToast(`呼叫失敗：${message}`, 'error');
+  } finally {
+    streamingAssistantIndex = null;
+    const replyText = messages[assistantIndex]?.content ?? '';
+    const streamFailed = replyText.startsWith('呼叫 Agent API 失敗');
+    if (!streamFailed) {
+      streamJustFinishedIndex = assistantIndex;
+      clearStreamJustFinishedTimer();
+      streamJustFinishedClearTimer = setTimeout(() => {
+        streamJustFinishedClearTimer = null;
+        streamJustFinishedIndex = null;
+        renderMessages();
+      }, 4500);
+    } else {
+      streamJustFinishedIndex = null;
+    }
+    renderMessages();
+    refreshApiCandidatesFromLatestAssistant();
   }
   await saveMessages();
 }
 
 // ===== 事件綁定與初始化 =====
-chatFormEl.addEventListener("submit", async (event) => {
+chatFormEl.addEventListener('submit', async (event) => {
   event.preventDefault();
   if (isAuthExpired()) {
     notifyAuthExpired();
@@ -2426,49 +2729,67 @@ chatFormEl.addEventListener("submit", async (event) => {
   await sendChatMessage(value, false);
 });
 
-clearChatButton.addEventListener("click", () => {
+clearChatButton.addEventListener('click', () => {
+  clearStreamJustFinishedTimer();
+  streamingAssistantIndex = null;
+  streamJustFinishedIndex = null;
   messages = [];
   renderMessages();
   void saveMessages();
 });
 
-toggleChatButton.addEventListener("click", () => {
+toggleChatButton.addEventListener('click', () => {
   setChatPanelOpen(!chatPanelOpen);
 });
-toggleWorkflowsButton.addEventListener("click", () => {
+toggleWorkflowsButton.addEventListener('click', () => {
   setWorkflowPanelOpen(!workflowPanelOpen);
 });
-toggleCurlParserButton.addEventListener("click", () => {
+toggleCurlParserButton.addEventListener('click', () => {
   setCurlParserOpen(!curlParserOpen);
 });
-toggleManualApiButton.addEventListener("click", () => {
+toggleManualApiButton.addEventListener('click', () => {
   setManualApiOpen(!manualApiOpen);
 });
-toggleSavedApisButton.addEventListener("click", () => {
+toggleSavedApisButton.addEventListener('click', () => {
   setSavedApisOpen(!savedApisOpen);
 });
-manualApiNameEl.addEventListener("input", () => {
+manualApiNameEl.addEventListener('input', () => {
   clearFieldError(manualApiNameEl);
   updateManualFormActions();
 });
-manualApiPathEl.addEventListener("input", () => {
+manualApiPathEl.addEventListener('input', () => {
   clearFieldError(manualApiPathEl);
   updateManualFormActions();
 });
-toggleExecutionResultButton.addEventListener("click", () => {
-  const collapsed = executionResultPanelEl.classList.toggle("collapsed");
-  toggleExecutionResultButton.textContent = collapsed ? "執行結果 ▸" : "執行結果 ▾";
+manualApiBodyEl.addEventListener('input', () => {
+  clearFieldError(manualApiBodyEl);
 });
-toggleSavedWorkflowsButton.addEventListener("click", () => {
+manualApiParamsRowsEl.addEventListener('input', (ev) => {
+  const t = ev.target as HTMLElement | null;
+  if (t?.classList.contains('field-error')) clearFieldError(t);
+});
+manualApiHeadersRowsEl.addEventListener('input', (ev) => {
+  const t = ev.target as HTMLElement | null;
+  if (t?.classList.contains('field-error')) clearFieldError(t);
+});
+manualApiHeadersRowsEl.addEventListener('change', (ev) => {
+  const t = ev.target as HTMLElement | null;
+  if (t?.classList.contains('field-error')) clearFieldError(t);
+});
+toggleExecutionResultButton.addEventListener('click', () => {
+  const collapsed = executionResultPanelEl.classList.toggle('collapsed');
+  toggleExecutionResultButton.textContent = collapsed ? '執行結果 ▸' : '執行結果 ▾';
+});
+toggleSavedWorkflowsButton.addEventListener('click', () => {
   setSavedWorkflowsOpen(!savedWorkflowsOpen);
 });
-clearExecutionResultButton.addEventListener("click", async () => {
+clearExecutionResultButton.addEventListener('click', async () => {
   execResults = [];
   executionResultListEl.replaceChildren();
   await saveMessages();
 });
 
-cancelApiDetailButton.addEventListener("click", () => {
+cancelApiDetailButton.addEventListener('click', () => {
   selectedApiIndex = -1;
   pinnedDetailSpec = null;
   pinnedSavedApiIndex = -1;
@@ -2477,32 +2798,37 @@ cancelApiDetailButton.addEventListener("click", () => {
   renderSavedApis();
 });
 
-addStepButton.addEventListener("click", () => {
+addStepButton.addEventListener('click', () => {
   const spec = editedDetailSpec ?? getAllApiCandidates()[selectedApiIndex];
   if (!spec) {
-    setToast("請先選擇一個 API。", "error");
+    setToast('請先選擇一個 API。', 'error');
+    return;
+  }
+  const apiKey = (spec.api || spec.path || '').trim();
+  if (!apiKey) {
+    setToast('API 識別（名稱或路徑）不完整。', 'error');
     return;
   }
   const stepData: WorkflowStep = {
-    api: spec.api! || spec.path!,
+    api: apiKey,
     path: spec.path,
     requestName: spec.requestName,
     method: spec.method,
     headers: spec.headers ? { ...spec.headers } : {},
     bodyTemplate: spec.bodyTemplate,
     bearerToken: spec.bearerToken,
-    purpose: spec.purpose || "",
+    purpose: spec.purpose || '',
     params: [...(spec.params || [])],
   };
   if (editingStepIndex >= 0 && editingStepIndex < draftSteps.length) {
     draftSteps[editingStepIndex] = stepData;
     editingStepIndex = -1;
-    addStepButton.textContent = "加入流程步驟";
-    addStepButton.classList.remove("updating");
-    setToast(`已更新步驟：${stepData.requestName || stepData.api}`, "ok");
+    addStepButton.textContent = '加入流程步驟';
+    addStepButton.classList.remove('updating');
+    setToast(`已更新步驟：${stepData.requestName || stepData.api}`, 'ok');
   } else {
     draftSteps.push(stepData);
-    setToast(`已加入步驟：${stepData.requestName || stepData.api}`, "ok");
+    setToast(`已加入步驟：${stepData.requestName || stepData.api}`, 'ok');
   }
   renderDraftSteps();
 });
@@ -2513,27 +2839,27 @@ function getCurrentDetailSpec(): ApiSpec | null {
   if (!src) return null;
   return {
     ...src,
-    api: src.api || src.path || "",
+    api: src.api || src.path || '',
     path: src.path,
     requestName: src.requestName,
     method: src.method,
     headers: src.headers ? { ...src.headers } : {},
     bodyTemplate: src.bodyTemplate,
     bearerToken: src.bearerToken,
-    purpose: src.purpose || "",
+    purpose: src.purpose || '',
     params: [...(src.params || [])],
   };
 }
 
-saveDetailApiButton.addEventListener("click", async () => {
+saveDetailApiButton.addEventListener('click', async () => {
   const spec = getCurrentDetailSpec();
   if (!spec) {
-    setToast("請先選擇一個 API。", "error");
+    setToast('請先選擇一個 API。', 'error');
     return;
   }
-  const baseName = (spec.requestName || spec.api || "CustomApi").trim();
+  const baseName = (spec.requestName || spec.api || 'CustomApi').trim();
   const isDup = customApiSpecs.some(
-    (s) => (s.requestName || s.api) === baseName && (s.path || s.api) === (spec.path || spec.api),
+    (s) => (s.requestName || s.api) === baseName && (s.path || s.api) === (spec.path || spec.api)
   );
   if (isDup) {
     spec.requestName = `${baseName}-copy`;
@@ -2547,14 +2873,14 @@ saveDetailApiButton.addEventListener("click", async () => {
   renderApiCandidates();
   setSavedApisOpen(true);
   await saveMessages();
-  setToast(isDup ? `已另存為「${spec.requestName}」` : `已儲存 API：${baseName}`, "ok");
+  setToast(isDup ? `已另存為「${spec.requestName}」` : `已儲存 API：${baseName}`, 'ok');
 });
 
-updateDetailApiButton.addEventListener("click", async () => {
+updateDetailApiButton.addEventListener('click', async () => {
   const spec = getCurrentDetailSpec();
   const targetIndex = pinnedSavedApiIndex;
   if (!spec || targetIndex < 0) {
-    setToast("找不到對應的已儲存 API 可更新。", "error");
+    setToast('找不到對應的已儲存 API 可更新。', 'error');
     return;
   }
   customApiSpecs[targetIndex] = spec;
@@ -2562,40 +2888,137 @@ updateDetailApiButton.addEventListener("click", async () => {
   renderSavedApis();
   renderApiCandidates();
   await saveMessages();
-  setToast(`已更新已儲存 API：${spec.requestName || spec.api}`, "ok");
+  setToast(`已更新已儲存 API：${spec.requestName || spec.api}`, 'ok');
 });
 
 function clearFieldError(el: HTMLElement): void {
-  el.classList.remove("field-error");
+  el.classList.remove('field-error');
   const hint = el.nextElementSibling;
-  if (hint && hint.classList.contains("field-error-hint")) hint.remove();
+  if (hint && hint.classList.contains('field-error-hint')) hint.remove();
+}
+
+function setFieldError(el: HTMLElement, hintText?: string): void {
+  clearFieldError(el);
+  el.classList.add('field-error');
+  if (hintText) {
+    const span = document.createElement('span');
+    span.className = 'field-error-hint';
+    span.textContent = hintText;
+    el.insertAdjacentElement('afterend', span);
+  }
+}
+
+function clearManualApiFormValidationHints(): void {
+  clearFieldError(manualApiNameEl);
+  clearFieldError(manualApiPathEl);
+  clearFieldError(manualApiBodyEl);
+  manualApiParamsRowsEl.querySelectorAll('input,select').forEach((node) => {
+    clearFieldError(node as HTMLElement);
+  });
+  manualApiHeadersRowsEl.querySelectorAll('input,select').forEach((node) => {
+    clearFieldError(node as HTMLElement);
+  });
+}
+
+/** 自訂 API 表單驗證；失敗時標紅欄位並 toast。 */
+function validateManualApiForm(): boolean {
+  clearManualApiFormValidationHints();
+  let ok = true;
+
+  const name = manualApiNameEl.value.trim();
+  if (!name) {
+    setFieldError(manualApiNameEl, '請填寫 API 名稱。');
+    ok = false;
+  } else if (!MANUAL_API_NAME_RE.test(name)) {
+    setFieldError(manualApiNameEl, '僅限英文字母、數字與底線，且須以英文或底線開頭。');
+    ok = false;
+  }
+
+  const path = manualApiPathEl.value.trim();
+  if (!path) {
+    setFieldError(manualApiPathEl, '請填寫 URL。');
+    ok = false;
+  } else if (!isManualApiPathWellFormed(path)) {
+    setFieldError(manualApiPathEl, '請使用完整的 http 或 https URL。');
+    ok = false;
+  }
+
+  if (!isManualApiBodyWellFormed(manualApiBodyEl.value)) {
+    setFieldError(manualApiBodyEl, 'Body 須為合法 JSON（或留白）。');
+    ok = false;
+  }
+
+  manualApiParamsRowsEl.querySelectorAll('.header-row').forEach((node) => {
+    const row = node as HTMLDivElement;
+    const inputs = row.querySelectorAll('input');
+    const keyIn = inputs[0] as HTMLInputElement | undefined;
+    const valIn = inputs[1] as HTMLInputElement | undefined;
+    if (!keyIn || !valIn) return;
+    const key = keyIn.value.trim();
+    const val = valIn.value.trim();
+    if (!key && !val) return;
+    if (!key && val) {
+      setFieldError(keyIn, '請填寫參數鍵名。');
+      ok = false;
+    } else if (key && !MANUAL_API_PARAM_KEY_RE.test(key)) {
+      setFieldError(keyIn, '鍵名僅限英文字母、數字與底線，且須以英文或底線開頭。');
+      ok = false;
+    }
+  });
+
+  manualApiHeadersRowsEl.querySelectorAll('.header-row').forEach((node) => {
+    const row = node as HTMLDivElement;
+    const select = row.querySelector('.header-key-select') as HTMLSelectElement | null;
+    const custom = row.querySelector('.header-key-custom') as HTMLInputElement | null;
+    const valInput = row.querySelector('.header-value') as HTMLInputElement | null;
+    if (!select || !custom || !valInput) return;
+    let key = '';
+    if (select.value === HEADER_KEY_CUSTOM) key = custom.value.trim();
+    else key = select.value.trim();
+    const val = valInput.value.trim();
+    if (!key && !val) return;
+    if (!key && val) {
+      const target = select.value === HEADER_KEY_CUSTOM ? custom : select;
+      setFieldError(target, '請選擇或填寫 Header 名稱。');
+      ok = false;
+      return;
+    }
+    if (select.value === HEADER_KEY_CUSTOM && key && !MANUAL_HTTP_HEADER_NAME_RE.test(key)) {
+      setFieldError(custom, 'Header 名稱含有不允許的字元。');
+      ok = false;
+    }
+  });
+
+  if (!ok) setToast('請修正標紅欄位後再儲存。', 'error');
+  return ok;
 }
 
 function clearManualForm(): void {
-  manualApiNameEl.value = "";
-  manualApiPathEl.value = "";
-  manualApiPurposeEl.value = "";
-  manualApiMethodEl.value = "GET";
+  clearManualApiFormValidationHints();
+  manualApiNameEl.value = '';
+  manualApiPathEl.value = '';
+  manualApiPurposeEl.value = '';
+  manualApiMethodEl.value = 'GET';
   renderManualParamsRows([]);
   renderManualHeaderRowsFromObject({});
-  manualApiBodyEl.value = "";
-  manualApiCurlEl.value = "";
-  addManualApiButton.textContent = "加入自訂 API";
-  manualApiActionsEl.classList.add("hidden");
+  manualApiBodyEl.value = '';
+  manualApiCurlEl.value = '';
+  addManualApiButton.textContent = '加入自訂 API';
+  manualApiActionsEl.classList.add('hidden');
   manualApiActionsEl.replaceChildren();
   editingApiIndex = -1;
-  addManualApiButton.style.display = "none";
+  addManualApiButton.style.display = 'none';
 }
 
 function buildSpecFromForm(): { name: string; path: string; spec: ApiSpec } {
   const name = manualApiNameEl.value.trim();
   const path = manualApiPathEl.value.trim();
   const purpose = manualApiPurposeEl.value.trim();
-  const method = (manualApiMethodEl.value.trim() || "GET").toUpperCase();
+  const method = (manualApiMethodEl.value.trim() || 'GET').toUpperCase();
   const headers = collectManualHeaders();
   const bodyTemplate = manualApiBodyEl.value.trim();
-  const bearerRaw = headers.Authorization ?? headers.authorization ?? "";
-  const bearerToken = bearerRaw.replace(/^Bearer\s+/i, "").trim();
+  const bearerRaw = headers.Authorization ?? headers.authorization ?? '';
+  const bearerToken = bearerRaw.replace(/^Bearer\s+/i, '').trim();
   const manualParams = collectManualParams();
   const params = manualParams.length ? manualParams : inferParamsFromPathAndBody(path, bodyTemplate);
   const spec: ApiSpec = {
@@ -2614,16 +3037,17 @@ function buildSpecFromForm(): { name: string; path: string; spec: ApiSpec } {
 
 function showPendingApiActions(): void {
   manualApiActionsEl.replaceChildren();
-  manualApiActionsEl.classList.remove("hidden");
-  const saveBtn = document.createElement("button");
-  saveBtn.type = "button";
-  saveBtn.className = "pending-api-save";
-  saveBtn.textContent = "儲存至已儲存的 API";
-  saveBtn.addEventListener("click", async () => {
+  manualApiActionsEl.classList.remove('hidden');
+  const saveBtn = document.createElement('button');
+  saveBtn.type = 'button';
+  saveBtn.className = 'pending-api-save';
+  saveBtn.textContent = '儲存至已儲存的 API';
+  saveBtn.addEventListener('click', async () => {
+    if (!validateManualApiForm()) return;
     const { name, spec } = buildSpecFromForm();
     if (!name || !spec.path) return;
     const isDup = customApiSpecs.some(
-      (s) => (s.requestName || s.api) === name && (s.path || s.api) === (spec.path || spec.api),
+      (s) => (s.requestName || s.api) === name && (s.path || s.api) === (spec.path || spec.api)
     );
     let finalName = name;
     if (isDup) {
@@ -2636,20 +3060,21 @@ function showPendingApiActions(): void {
     setSavedApisOpen(true);
     clearManualForm();
     await saveMessages();
-    setToast(isDup ? `已另存為「${finalName}」` : `已儲存 API：${finalName}`, "ok");
+    setToast(isDup ? `已另存為「${finalName}」` : `已儲存 API：${finalName}`, 'ok');
   });
-  const addStepBtn = document.createElement("button");
-  addStepBtn.type = "button";
-  addStepBtn.className = "pending-api-step";
-  addStepBtn.textContent = "加入流程步驟";
-  addStepBtn.addEventListener("click", () => {
+  const addStepBtn = document.createElement('button');
+  addStepBtn.type = 'button';
+  addStepBtn.className = 'pending-api-step';
+  addStepBtn.textContent = '加入流程步驟';
+  addStepBtn.addEventListener('click', () => {
+    if (!validateManualApiForm()) return;
     const { name, spec } = buildSpecFromForm();
     if (!name || !spec.path) return;
     draftSteps.push({ ...spec, params: [...(spec.params ?? [])] });
     renderDraftSteps();
     renderApiDetail(spec);
     clearManualForm();
-    setToast(`已加入步驟：${name}`, "ok");
+    setToast(`已加入步驟：${name}`, 'ok');
   });
   manualApiActionsEl.appendChild(saveBtn);
   manualApiActionsEl.appendChild(addStepBtn);
@@ -2659,42 +3084,38 @@ function updateManualFormActions(): void {
   const name = manualApiNameEl.value.trim();
   const path = manualApiPathEl.value.trim();
   if (editingApiIndex >= 0) {
-    addManualApiButton.style.display = "block";
-    manualApiActionsEl.classList.add("hidden");
+    addManualApiButton.style.display = 'block';
+    manualApiActionsEl.classList.add('hidden');
     manualApiActionsEl.replaceChildren();
     return;
   }
-  addManualApiButton.style.display = "none";
+  addManualApiButton.style.display = 'none';
   if (name && path) {
     showPendingApiActions();
   } else {
-    manualApiActionsEl.classList.add("hidden");
+    manualApiActionsEl.classList.add('hidden');
     manualApiActionsEl.replaceChildren();
   }
 }
 
 // Edit mode only: Save button handler
-addManualApiButton.addEventListener("click", async () => {
+addManualApiButton.addEventListener('click', async () => {
   if (editingApiIndex < 0 || editingApiIndex >= customApiSpecs.length) return;
+  if (!validateManualApiForm()) return;
   const { name, path, spec } = buildSpecFromForm();
-  if (!name || !path) {
-    if (!name) manualApiNameEl.classList.add("field-error");
-    if (!path) manualApiPathEl.classList.add("field-error");
-    setToast("請填寫必要欄位。", "error");
-    return;
-  }
+  if (!name || !path) return;
   customApiSpecs[editingApiIndex] = spec;
   clearManualForm();
   renderSavedApis();
   await saveMessages();
-  setToast(`已更新 API：${name}`, "ok");
+  setToast(`已更新 API：${name}`, 'ok');
 });
 
-parseCurlButton.addEventListener("click", () => {
+parseCurlButton.addEventListener('click', () => {
   const raw = manualApiCurlEl.value.trim() || manualApiPathEl.value.trim();
   const parsed = parseCurlCommand(raw);
   if (!parsed) {
-    setToast("未偵測到有效的 curl 指令。", "error");
+    setToast('未偵測到有效的 curl 指令。', 'error');
     return;
   }
   manualApiMethodEl.value = parsed.method;
@@ -2703,10 +3124,11 @@ parseCurlButton.addEventListener("click", () => {
   renderManualHeaderRowsFromObject(parsed.headers);
   manualApiBodyEl.value = parsed.body;
   if (!manualApiNameEl.value.trim()) {
-    const tail = parsed.url.split("?")[0].split("/").filter(Boolean).pop() || "CustomApi";
+    const tail = parsed.url.split('?')[0].split('/').filter(Boolean).pop() || 'CustomApi';
     manualApiNameEl.value = `${tail}Request`;
   }
-  setToast(`已解析 curl（${parsed.method} ${parsed.url}）`, "ok");
+  clearManualApiFormValidationHints();
+  setToast(`已解析 curl（${parsed.method} ${parsed.url}）`, 'ok');
   setManualApiOpen(true);
   updateManualFormActions();
 });
@@ -2724,7 +3146,7 @@ function showExecutionConfirmDialog(): Promise<boolean> {
       .map((step, i) => {
         const urlParams: Record<string, string> = {};
         try {
-          const urlObj = new URL(step.path ?? step.api ?? "");
+          const urlObj = new URL(step.path ?? step.api ?? '');
           urlObj.searchParams.forEach((v, k) => {
             urlParams[k] = v;
           });
@@ -2746,19 +3168,19 @@ function showExecutionConfirmDialog(): Promise<boolean> {
       return;
     }
 
-    const overlay = document.createElement("div");
-    overlay.className = "exec-confirm-overlay";
-    const dialog = document.createElement("div");
-    dialog.className = "exec-confirm-dialog";
+    const overlay = document.createElement('div');
+    overlay.className = 'exec-confirm-overlay';
+    const dialog = document.createElement('div');
+    dialog.className = 'exec-confirm-dialog';
 
-    const titleEl = document.createElement("div");
-    titleEl.className = "exec-confirm-title";
-    titleEl.textContent = "執行前確認";
-    const subtitleEl = document.createElement("div");
-    subtitleEl.className = "exec-confirm-subtitle";
-    subtitleEl.textContent = "請確認以下步驟的參數，確認無誤後再執行。";
-    const stepsWrap = document.createElement("div");
-    stepsWrap.className = "exec-confirm-steps";
+    const titleEl = document.createElement('div');
+    titleEl.className = 'exec-confirm-title';
+    titleEl.textContent = '執行前確認';
+    const subtitleEl = document.createElement('div');
+    subtitleEl.className = 'exec-confirm-subtitle';
+    subtitleEl.textContent = '請確認以下步驟的參數，確認無誤後再執行。';
+    const stepsWrap = document.createElement('div');
+    stepsWrap.className = 'exec-confirm-steps';
 
     const stepEditors: {
       index: number;
@@ -2770,31 +3192,31 @@ function showExecutionConfirmDialog(): Promise<boolean> {
     }[] = [];
 
     stepsToReview.forEach(({ step, index, urlParams, hasParams, hasBody }) => {
-      const card = document.createElement("div");
-      card.className = "exec-confirm-step";
-      const nameEl = document.createElement("div");
-      nameEl.className = "exec-confirm-step-name";
+      const card = document.createElement('div');
+      card.className = 'exec-confirm-step';
+      const nameEl = document.createElement('div');
+      nameEl.className = 'exec-confirm-step-name';
       nameEl.textContent = `${index + 1}. ${step.requestName ?? step.api}`;
       card.appendChild(nameEl);
 
       const paramInputs: Record<string, HTMLInputElement> = {};
       if (hasParams) {
-        const label = document.createElement("div");
-        label.className = "exec-confirm-label";
-        label.textContent = "Params（URL 查詢參數）";
+        const label = document.createElement('div');
+        label.className = 'exec-confirm-label';
+        label.textContent = 'Params（URL 查詢參數）';
         card.appendChild(label);
-        const grid = document.createElement("div");
-        grid.className = "exec-confirm-params";
+        const grid = document.createElement('div');
+        grid.className = 'exec-confirm-params';
         for (const [key, val] of Object.entries(urlParams)) {
-          const row = document.createElement("div");
-          row.className = "exec-confirm-param-row";
-          const keyEl = document.createElement("span");
-          keyEl.className = "exec-confirm-param-key";
+          const row = document.createElement('div');
+          row.className = 'exec-confirm-param-row';
+          const keyEl = document.createElement('span');
+          keyEl.className = 'exec-confirm-param-key';
           keyEl.textContent = key;
-          const valInput = document.createElement("input");
-          valInput.type = "text";
+          const valInput = document.createElement('input');
+          valInput.type = 'text';
           valInput.value = val;
-          valInput.className = "exec-confirm-param-value";
+          valInput.className = 'exec-confirm-param-value';
           row.appendChild(keyEl);
           row.appendChild(valInput);
           grid.appendChild(row);
@@ -2805,37 +3227,37 @@ function showExecutionConfirmDialog(): Promise<boolean> {
 
       let bodyInput: HTMLTextAreaElement | null = null;
       if (hasBody) {
-        const label = document.createElement("div");
-        label.className = "exec-confirm-label";
-        label.textContent = "Body";
-        bodyInput = document.createElement("textarea");
-        bodyInput.className = "exec-confirm-body";
-        bodyInput.value = step.bodyTemplate ?? "";
+        const label = document.createElement('div');
+        label.className = 'exec-confirm-label';
+        label.textContent = 'Body';
+        bodyInput = document.createElement('textarea');
+        bodyInput.className = 'exec-confirm-body';
+        bodyInput.value = step.bodyTemplate ?? '';
         card.appendChild(label);
         card.appendChild(bodyInput);
       }
 
       stepsWrap.appendChild(card);
-      const urlBase = (step.path ?? step.api ?? "").split("?")[0];
+      const urlBase = (step.path ?? step.api ?? '').split('?')[0];
       stepEditors.push({ index, urlBase, hasParams, paramInputs, hasBody, bodyInput });
     });
 
-    const actions = document.createElement("div");
-    actions.className = "exec-confirm-actions";
-    const cancelBtn = document.createElement("button");
-    cancelBtn.type = "button";
-    cancelBtn.className = "exec-confirm-cancel";
-    cancelBtn.textContent = "取消";
-    cancelBtn.addEventListener("click", () => {
+    const actions = document.createElement('div');
+    actions.className = 'exec-confirm-actions';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'exec-confirm-cancel';
+    cancelBtn.textContent = '取消';
+    cancelBtn.addEventListener('click', () => {
       overlay.remove();
       resolve(false);
     });
 
-    const confirmBtn = document.createElement("button");
-    confirmBtn.type = "button";
-    confirmBtn.className = "exec-confirm-ok";
-    confirmBtn.textContent = "確認執行";
-    confirmBtn.addEventListener("click", () => {
+    const confirmBtn = document.createElement('button');
+    confirmBtn.type = 'button';
+    confirmBtn.className = 'exec-confirm-ok';
+    confirmBtn.textContent = '確認執行';
+    confirmBtn.addEventListener('click', () => {
       stepEditors.forEach(({ index, urlBase, hasParams, paramInputs, hasBody, bodyInput }) => {
         const updatedStep = { ...draftSteps[index] };
         if (hasParams) {
@@ -2867,7 +3289,7 @@ function showExecutionConfirmDialog(): Promise<boolean> {
   });
 }
 
-runWorkflowButton.addEventListener("click", async () => {
+runWorkflowButton.addEventListener('click', async () => {
   if (isAuthExpired()) {
     notifyAuthExpired();
     return;
@@ -2876,15 +3298,15 @@ runWorkflowButton.addEventListener("click", async () => {
   if (confirmed) void executeDraftWorkflow();
 });
 
-saveWorkflowButton.addEventListener("click", async () => {
+saveWorkflowButton.addEventListener('click', async () => {
   if (!draftSteps.length) {
-    setToast("流程草稿是空的，請先加入 API。", "error");
+    setToast('流程草稿是空的，請先加入 API。', 'error');
     return;
   }
   const name = draftWorkflowNameInputEl.value.trim();
   if (!name) {
-    const msg = draftNameFromImport ? "請填寫流程名稱後再儲存。" : "請填寫流程名稱（自行建立的草稿為必填）。";
-    setToast(msg, "error");
+    const msg = draftNameFromImport ? '請填寫流程名稱後再儲存。' : '請填寫流程名稱（自行建立的草稿為必填）。';
+    setToast(msg, 'error');
     draftWorkflowNameInputEl.focus();
     return;
   }
@@ -2910,65 +3332,111 @@ saveWorkflowButton.addEventListener("click", async () => {
   renderSavedWorkflows();
   setSavedWorkflowsOpen(true);
   await saveMessages();
-  setToast(`已建立流程：${name}`, "ok");
+  setToast(`已建立流程：${name}`, 'ok');
 });
 
-clearDraftButton.addEventListener("click", () => {
+clearDraftButton.addEventListener('click', () => {
   draftSteps = [];
-  currentWorkflowName = "";
+  currentWorkflowName = '';
   draftNameFromImport = false;
-  draftWorkflowNameInputEl.value = "";
-  importWorkflowJsonInputEl.value = "";
+  draftWorkflowNameInputEl.value = '';
+  importWorkflowJsonInputEl.value = '';
   renderDraftSteps();
-  setToast("已清空流程草稿。", "normal");
+  setToast('已清空流程草稿。', 'normal');
 });
 
-authorizeGoogleButton.addEventListener("click", () => {
-  authorizeGoogleButton.classList.remove("auth-expired-pulse");
+authorizeGoogleButton.addEventListener('click', () => {
+  authorizeGoogleButton.classList.remove('auth-expired-pulse');
   void authorizeNow();
 });
 
-closeDockButton.addEventListener("click", () => {
+function setPanelSettingsOpen(open: boolean): void {
+  panelSettingsOverlayEl.classList.toggle('hidden', !open);
+  panelSettingsOverlayEl.setAttribute('aria-hidden', open ? 'false' : 'true');
+  if (open) closePanelSettingsButton.focus();
+  else openPanelSettingsButton.focus();
+}
+
+openPanelSettingsButton.addEventListener('click', () => setPanelSettingsOpen(true));
+closePanelSettingsButton.addEventListener('click', () => setPanelSettingsOpen(false));
+
+panelSettingsOverlayEl.addEventListener('click', (e: MouseEvent) => {
+  if (e.target === panelSettingsOverlayEl) setPanelSettingsOpen(false);
+});
+
+document.addEventListener('keydown', (e: KeyboardEvent) => {
+  if (e.key !== 'Escape') return;
+  if (panelSettingsOverlayEl.classList.contains('hidden')) return;
+  setPanelSettingsOpen(false);
+});
+
+closeDockButton.addEventListener('click', () => {
   chrome?.runtime?.sendMessage({ type: CLOSE_HELLO_DOCK });
 });
 
-exportDraftWorkflowJsonButton.addEventListener("click", () => {
+function postDockToHostMessage(msg: PanelToHostDockMessage): void {
+  window.parent?.postMessage(msg, '*');
+}
+
+if (dockShellDragGripEl) {
+  dockShellDragGripEl.addEventListener('mousedown', (e: MouseEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    postDockToHostMessage({
+      source: PANEL_TO_HOST_SOURCE,
+      kind: 'dock-drag-start',
+      iframeClientX: e.clientX,
+      iframeClientY: e.clientY,
+    });
+  });
+
+  dockShellDragGripEl.addEventListener('dblclick', (e: MouseEvent) => {
+    e.preventDefault();
+    postDockToHostMessage({ source: PANEL_TO_HOST_SOURCE, kind: 'dock-drag-reset-dblclick' });
+  });
+}
+
+minimizeDockButton.addEventListener('click', () => {
+  postDockToHostMessage({ source: PANEL_TO_HOST_SOURCE, kind: 'dock-minimize' });
+});
+
+exportDraftWorkflowJsonButton.addEventListener('click', () => {
   if (!draftSteps.length) {
-    setToast("草稿為空，無法匯出。", "error");
+    setToast('草稿為空，無法匯出。', 'error');
     return;
   }
   const name =
     draftWorkflowNameInputEl.value.trim() || currentWorkflowName.trim() || `草稿_${savedWorkflows.length + 1}`;
   const json = buildWorkflowExportJson(name, draftSteps);
   downloadWorkflowJsonFile(name, json);
-  setToast("已下載草稿 JSON。", "ok");
+  setToast('已下載草稿 JSON。', 'ok');
 });
 
-copyDraftWorkflowJsonButton.addEventListener("click", async () => {
+copyDraftWorkflowJsonButton.addEventListener('click', async () => {
   if (!draftSteps.length) {
-    setToast("草稿為空，無法匯出。", "error");
+    setToast('草稿為空，無法匯出。', 'error');
     return;
   }
   const name =
     draftWorkflowNameInputEl.value.trim() || currentWorkflowName.trim() || `草稿_${savedWorkflows.length + 1}`;
   const json = buildWorkflowExportJson(name, draftSteps);
   const copied = await copyWorkflowJsonToClipboard(json);
-  if (copied) setToast("已複製草稿 JSON 到剪貼簿。", "ok");
+  if (copied) setToast('已複製草稿 JSON 到剪貼簿。', 'ok');
   else {
     downloadWorkflowJsonFile(name, json);
-    setToast("複製失敗，已改為下載 JSON。", "normal");
+    setToast('複製失敗，已改為下載 JSON。', 'normal');
   }
 });
 
-importWorkflowToDraftButton.addEventListener("click", async () => {
+importWorkflowToDraftButton.addEventListener('click', async () => {
   const text = importWorkflowJsonInputEl.value.trim();
   if (!text) {
-    setToast("請先貼上流程 JSON。", "error");
+    setToast('請先貼上流程 JSON。', 'error');
     return;
   }
   const parsed = parseWorkflowImportJson(text);
   if (!parsed.ok) {
-    setToast(parsed.error, "error");
+    setToast(parsed.error, 'error');
     return;
   }
   const draftName = defaultImportedWorkflowName(parsed.name);
@@ -2992,45 +3460,49 @@ importWorkflowToDraftButton.addEventListener("click", async () => {
   syncDraftWorkflowNameInputFromState();
   draftNameFromImport = true;
   editingStepIndex = -1;
-  addStepButton.textContent = "加入流程步驟";
-  addStepButton.classList.remove("updating");
+  addStepButton.textContent = '加入流程步驟';
+  addStepButton.classList.remove('updating');
   renderDraftSteps();
   renderApiDetail(getAllApiCandidates()[selectedApiIndex] ?? null);
   setWorkflowPanelOpen(true);
   await saveMessages();
-  setToast(`已匯入草稿：${draftName}`, "ok");
+  setToast(`已匯入草稿：${draftName}`, 'ok');
 });
 
 setWorkflowPanelOpen(true);
 renderManualHeaderRowsFromObject({});
 renderManualParamsRows([]);
+bindChatMarkdownCopyOnce();
 void loadMessages();
 
-draftWorkflowNameInputEl.addEventListener("input", () => {
+draftWorkflowNameInputEl.addEventListener('input', () => {
   currentWorkflowName = draftWorkflowNameInputEl.value;
   draftNameFromImport = false;
 });
 
-addHeaderRowButton.addEventListener("click", () => {
+addHeaderRowButton.addEventListener('click', () => {
   appendManualHeaderRow();
 });
-addParamRowButton.addEventListener("click", () => {
+addParamRowButton.addEventListener('click', () => {
   appendManualParamRow();
 });
-clearManualApiButton.addEventListener("click", () => {
+clearManualApiButton.addEventListener('click', () => {
   clearManualForm();
-  setToast("已清除自訂 API 內容。", "normal");
+  setToast('已清除自訂 API 內容。', 'normal');
 });
 
 // ── Chat messages resize handle ──
-const CHAT_HEIGHT_KEY = "chat_messages_height";
+const CHAT_HEIGHT_KEY = 'chat_messages_height';
 (function initChatResizeHandle() {
-  const handle = document.getElementById("chatResizeHandle") as HTMLDivElement;
+  const handle = document.getElementById('chatResizeHandle') as HTMLDivElement;
   if (!handle) return;
 
   // Restore saved height
   const saved = sessionStorage.getItem(CHAT_HEIGHT_KEY);
-  if (saved) chatMessagesEl.style.height = saved;
+  if (saved) {
+    chatMessagesEl.style.height = saved;
+    chatMessagesEl.classList.add('chat-messages--user-height');
+  }
 
   let startY = 0;
   let startH = 0;
@@ -3038,22 +3510,24 @@ const CHAT_HEIGHT_KEY = "chat_messages_height";
   function onMouseMove(e: MouseEvent) {
     const delta = e.clientY - startY;
     const newH = Math.max(80, startH + delta);
-    chatMessagesEl.style.height = newH + "px";
+    chatMessagesEl.classList.add('chat-messages--user-height');
+    chatMessagesEl.style.height = `${newH}px`;
   }
 
   function onMouseUp() {
-    document.removeEventListener("mousemove", onMouseMove);
-    document.removeEventListener("mouseup", onMouseUp);
-    handle.classList.remove("dragging");
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+    handle.classList.remove('dragging');
     sessionStorage.setItem(CHAT_HEIGHT_KEY, chatMessagesEl.style.height);
   }
 
-  handle.addEventListener("mousedown", (e: MouseEvent) => {
+  handle.addEventListener('mousedown', (e: MouseEvent) => {
     e.preventDefault();
     startY = e.clientY;
     startH = chatMessagesEl.offsetHeight;
-    handle.classList.add("dragging");
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
+    chatMessagesEl.classList.add('chat-messages--user-height');
+    handle.classList.add('dragging');
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
   });
 })();

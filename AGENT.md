@@ -10,7 +10,7 @@
 - **專案目錄**：`personal-extension/`
 - **主要程式**：`src/panel.ts`、`src/content.ts`、`src/background.ts`、`src/messages.ts`、`panel.html`、`src/panel.scss`
 - **建置指令**：`npm run build`（產出 `panel.js`、`content.js`、`background.js`、`panel.css`）
-- **其他建置**：`npm run build:dev`（sourcemap）、`npm run build:prod`（minify + 壓縮 CSS + 移除 console）、`npm run build:watch`（僅監聽 TS）、`npm run build:css`（僅 SCSS）、`npm run typecheck`（僅型別）
+- **其他建置**：`npm run build:dev`（sourcemap）、`npm run build:prod`（minify + 壓縮 CSS + 移除 console）、`npm run build:watch`（僅監聽 TS）、`npm run build:css`（僅 SCSS）、`npm run typecheck`（僅型別）、`npm run lint`／`lint:fix`（ESLint）、`npm run format`／`format:check`（Prettier）
 - **Node 版本**：**22 或以上**（`package.json` 的 `engines`、`prebuild`／`build:watch` 會檢查；`.nvmrc` 建議仍使用 `22`）
 - **啟動流程**：工具列點擊 → `background` 送 `TOGGLE_HELLO_DOCK`（必要時注入 `content.js` 後送 `OPEN_HELLO_DOCK`）→ dock（resize + iframe）載入 `panel.html`
 
@@ -24,11 +24,11 @@
 
 ## B. 硬性規則（必遵守）
 
-1. **所有 UI/流程邏輯優先改 `src/*`**，不要直接改產物檔。  
-2. 每次改動後都要執行 **`npm run build`**，確保 `panel.js`／`content.js`／`background.js`／`panel.css` 同步。  
-3. `panel.html` 的 `id` 不能任意改名，改名必須同步 `src/panel.ts` 綁定。  
-4. 涉及授權狀態時，維持 `notifyAuthExpired()` 作為統一失效入口（狀態 + toast）。  
-5. 刪除行為需有二次確認（`confirmDelete(...)`），除非使用者明確要求移除（例如：**清空流程草稿**已改為不詢問）。  
+1. **所有 UI/流程邏輯優先改 `src/*`**，不要直接改產物檔。
+2. 每次改動後都要執行 **`npm run build`**，確保 `panel.js`／`content.js`／`background.js`／`panel.css` 同步。
+3. `panel.html` 的 `id` 不能任意改名，改名必須同步 `src/panel.ts` 綁定。
+4. 涉及授權狀態時，維持 `notifyAuthExpired()` 作為統一失效入口（狀態 + toast）。
+5. 刪除行為需有二次確認（`confirmDelete(...)`），除非使用者明確要求移除（例如：**清空流程草稿**已改為不詢問）。
 6. 未經要求不要重構無關檔案、不要刪除 `AGENT.md` / `ARCHITECTURE.md`。
 
 ---
@@ -88,22 +88,23 @@
 
 ## D. 檔案對照（改哪裡）
 
-| 任務 | 優先修改 |
-|------|-----------|
-| API 設定邏輯、儲存 API、流程草稿、授權提醒 | `src/panel.ts` |
-| API 設定按鈕版型與視覺 | `src/panel.scss` |
-| 面板結構（欄位/按鈕容器） | `panel.html` |
+| 任務                                            | 優先修改         |
+| ----------------------------------------------- | ---------------- |
+| API 設定邏輯、儲存 API、流程草稿、授權提醒      | `src/panel.ts`   |
+| API 設定按鈕版型與視覺                          | `src/panel.scss` |
+| 面板結構（欄位/按鈕容器）                       | `panel.html`     |
 | dock 注入、主頁 padding、關閉 dock 訊息、banner | `src/content.ts` |
-| 權限與注入範圍 | `manifest.json` |
+| 權限與注入範圍                                  | `manifest.json`  |
 
 ---
 
 ## E. 標準作業流程（Agent）
 
-1. 先改 `src/*.ts` / `src/*.scss` / `panel.html`。  
+1. 先改 `src/*.ts` / `src/*.scss` / `panel.html`。
 2. 執行：
    - `nvm use`（若環境有 nvm；專案 `.nvmrc` 為 22）
    - `npm run typecheck`（建議；僅型別、不產檔）
+   - `npm run lint` 與 `npm run format:check`（建議；靜態檢查與排版）
    - `npm run build`
 3. 驗證：
    - 候選 API 與已儲存 API 的選取是否互斥

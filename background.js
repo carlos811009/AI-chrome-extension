@@ -40,8 +40,7 @@
       const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
       const id = tabs[0]?.id;
       if (!id) return;
-      await chrome.tabs.sendMessage(id, { type: CLOSE_HELLO_DOCK }).catch(() => {
-      });
+      await chrome.tabs.sendMessage(id, { type: CLOSE_HELLO_DOCK }).catch(() => void 0);
     })();
   });
 })();

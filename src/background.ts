@@ -1,10 +1,6 @@
-import {
-  CLOSE_HELLO_DOCK,
-  OPEN_HELLO_DOCK,
-  TOGGLE_HELLO_DOCK,
-} from "./messages";
+import { CLOSE_HELLO_DOCK, OPEN_HELLO_DOCK, TOGGLE_HELLO_DOCK } from './messages';
 
-const ALLOWED_PROTOCOLS = ["http:", "https:"];
+const ALLOWED_PROTOCOLS = ['http:', 'https:'];
 
 function isSupportedUrl(url: string): boolean {
   try {
@@ -28,7 +24,7 @@ async function openDockOnTab(tab: chrome.tabs.Tab): Promise<void> {
   try {
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      files: ["content.js"],
+      files: ['content.js'],
     });
     await chrome.tabs.sendMessage(tab.id, { type: OPEN_HELLO_DOCK });
   } catch {
@@ -46,6 +42,6 @@ chrome.runtime.onMessage.addListener((message: { type?: string }) => {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     const id = tabs[0]?.id;
     if (!id) return;
-    await chrome.tabs.sendMessage(id, { type: CLOSE_HELLO_DOCK }).catch(() => {});
+    await chrome.tabs.sendMessage(id, { type: CLOSE_HELLO_DOCK }).catch(() => undefined);
   })();
 });

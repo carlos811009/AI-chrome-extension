@@ -5,10 +5,10 @@
 
 **目標對齊**
 
-| 目標 | 本計劃對應方向 |
-|------|----------------|
-| 好維護 | 單檔職責切分、型別與訊息協定集中、建置與檢查自動化 |
-| 好查看 | 目錄與模組邊界清楚、索引文件、純函式命名與區塊一致 |
+| 目標     | 本計劃對應方向                                        |
+| -------- | ----------------------------------------------------- |
+| 好維護   | 單檔職責切分、型別與訊息協定集中、建置與檢查自動化    |
+| 好查看   | 目錄與模組邊界清楚、索引文件、純函式命名與區塊一致    |
 | 方便測試 | 抽出可單元測試的純邏輯、測試框架與最小測試集、CI 可選 |
 
 ---
@@ -23,13 +23,13 @@
 
 ### 1.2 主要痛點
 
-| 項目 | 說明 | 影響 |
-|------|------|------|
-| **`src/panel.ts` 體積** | 單檔約三千餘行、百餘個頂層函式與大量 DOM 狀態 | 尋找修改點成本高、合併衝突機率高、難以單獨測試局部邏輯 |
-| **無自動化測試** | 專案內無 `test`／`*spec*` 檔 | 回歸依賴手動清單（`AGENT.md` E 節），易漏測 |
-| **`background.js` 非 TS** | 與 `src/content.ts`、`src/panel.ts`  toolchain 不一致 | 型別與訊息字串無法與 panel／content 共用，重構易漏改 |
-| **`tsconfig` 僅 `noEmit`** | 型別檢查需手動執行 `tsc` | 若未養成習慣，錯誤延後到執行期才發現 |
-| **`panel.scss` 規模** | 與 UI 同量級成長 | 與 `panel.ts` 類似，後續可考慮按區塊拆分檔案再以 `@use` 彙整（純維護結構） |
+| 項目                       | 說明                                                 | 影響                                                                       |
+| -------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------- |
+| **`src/panel.ts` 體積**    | 單檔約三千餘行、百餘個頂層函式與大量 DOM 狀態        | 尋找修改點成本高、合併衝突機率高、難以單獨測試局部邏輯                     |
+| **無自動化測試**           | 專案內無 `test`／`*spec*` 檔                         | 回歸依賴手動清單（`AGENT.md` E 節），易漏測                                |
+| **`background.js` 非 TS**  | 與 `src/content.ts`、`src/panel.ts` toolchain 不一致 | 型別與訊息字串無法與 panel／content 共用，重構易漏改                       |
+| **`tsconfig` 僅 `noEmit`** | 型別檢查需手動執行 `tsc`                             | 若未養成習慣，錯誤延後到執行期才發現                                       |
+| **`panel.scss` 規模**      | 與 UI 同量級成長                                     | 與 `panel.ts` 類似，後續可考慮按區塊拆分檔案再以 `@use` 彙整（純維護結構） |
 
 ### 1.3 與「不異動程式邏輯」相容的說明
 
@@ -43,15 +43,15 @@
 
 對齊 `ARCHITECTURE.md` 第 4 節已有之「九大區塊」，建議**漸進式**拆成多檔（範例對應，名稱可再調整）：
 
-| 建議模組 | 涵蓋內容（摘自現有分段） |
-|----------|-------------------------|
-| `types/` 或 `panel/types.ts` | `ApiSpec`、`WorkflowStep`、`AuthState`、storage 相關型別 |
-| `constants.ts` | `STORAGE_KEY`、OAuth／API 端點常數（與機密注入策略一併規劃，見 5.2） |
-| `auth.ts` | 授權狀態讀寫、`notifyAuthExpired`、`isAllowedAiiiEmail` 等 |
-| `curl.ts` | `parseCurlCommand`、`collectCurlSnippetsFromText`、`extractApiCandidatesFromText` 等 |
-| `workflow-share.ts` | 匯入／匯出 JSON、sanitize、sigrature、確認對話框資料結構 |
-| `storage-chat.ts` | 訊息載入／儲存、與 chat API 呼叫（若仍過大可再拆 `chat-api.ts`） |
-| `panel-main.ts` 或保留 `panel.ts` | DOM 綁定、事件匯流、初始化 `init` |
+| 建議模組                          | 涵蓋內容（摘自現有分段）                                                             |
+| --------------------------------- | ------------------------------------------------------------------------------------ |
+| `types/` 或 `panel/types.ts`      | `ApiSpec`、`WorkflowStep`、`AuthState`、storage 相關型別                             |
+| `constants.ts`                    | `STORAGE_KEY`、OAuth／API 端點常數（與機密注入策略一併規劃，見 5.2）                 |
+| `auth.ts`                         | 授權狀態讀寫、`notifyAuthExpired`、`isAllowedAiiiEmail` 等                           |
+| `curl.ts`                         | `parseCurlCommand`、`collectCurlSnippetsFromText`、`extractApiCandidatesFromText` 等 |
+| `workflow-share.ts`               | 匯入／匯出 JSON、sanitize、sigrature、確認對話框資料結構                             |
+| `storage-chat.ts`                 | 訊息載入／儲存、與 chat API 呼叫（若仍過大可再拆 `chat-api.ts`）                     |
+| `panel-main.ts` 或保留 `panel.ts` | DOM 綁定、事件匯流、初始化 `init`                                                    |
 
 **實作策略**：先拆「依賴最少、純函式最多」的區塊（如 curl／workflow JSON），最後再動 DOM 密集區，可降低風險。
 
@@ -67,8 +67,8 @@
 
 新增 `src/messages.ts`（或 `protocol.ts`）集中：
 
-- `TOGGLE_HELLO_DOCK`、`OPEN_HELLO_DOCK`、`CLOSE_HELLO_DOCK`、`SHOW_HELLO_BANNER` 等字串常數  
-- `ContentMessage` 等 payload 型別  
+- `TOGGLE_HELLO_DOCK`、`OPEN_HELLO_DOCK`、`CLOSE_HELLO_DOCK`、`SHOW_HELLO_BANNER` 等字串常數
+- `ContentMessage` 等 payload 型別
 
 `content.ts`、`background`、文件中的表格可引用同一處，減少漂移。
 
@@ -76,8 +76,8 @@
 
 建議新增（不改邏輯，只加流程）：
 
-- `typecheck`：`tsc --noEmit`（沿用現有 `tsconfig.json`）  
-- `build:watch`：esbuild `watch` 模式，加速本機迭代  
+- `typecheck`：`tsc --noEmit`（沿用現有 `tsconfig.json`）
+- `build:watch`：esbuild `watch` 模式，加速本機迭代
 
 ---
 
@@ -101,10 +101,10 @@
 
 ### 4.1 測試框架選型（優先級：高）
 
-| 方案 | 說明 |
-|------|------|
-| **Vitest** | 與 TypeScript、esbuild 生態常見整合；可測 Node 環境純函式 |
-| **Node 內建 test** | 依賴少，適合極小測試集 |
+| 方案               | 說明                                                      |
+| ------------------ | --------------------------------------------------------- |
+| **Vitest**         | 與 TypeScript、esbuild 生態常見整合；可測 Node 環境純函式 |
+| **Node 內建 test** | 依賴少，適合極小測試集                                    |
 
 Extension 內建 API（`chrome.*`）宜以 **mock** 或僅測「不依賴 chrome 的純函式」為第一階段。
 
@@ -112,15 +112,15 @@ Extension 內建 API（`chrome.*`）宜以 **mock** 或僅測「不依賴 chrome
 
 建議優先為下列邏輯補單元測試（與 `AGENT.md` F 節「下次建議」一致且可量化）：
 
-1. **Curl 解析與 API 抽取**：`parseCurlCommand`、`extractApiCandidatesFromText`（邊界：多段 curl、markdown 包夾、缺 header）  
-2. **流程 JSON**：`parseWorkflowImportJson`、`buildWorkflowExportJson`、sanitize headers、同名／同 signature 的 helper（若為純函式）  
-3. **字串／標準化工具**：`endpointKey`、`workflowStepSignature`、`normalizeWorkflowRequestTarget` 等  
+1. **Curl 解析與 API 抽取**：`parseCurlCommand`、`extractApiCandidatesFromText`（邊界：多段 curl、markdown 包夾、缺 header）
+2. **流程 JSON**：`parseWorkflowImportJson`、`buildWorkflowExportJson`、sanitize headers、同名／同 signature 的 helper（若為純函式）
+3. **字串／標準化工具**：`endpointKey`、`workflowStepSignature`、`normalizeWorkflowRequestTarget` 等
 
 上述函式在拆模組後，測試檔可直接 import，無需啟動瀏覽器。
 
 ### 4.3 第二階段（可選）
 
-- **Playwright** 或 **puppeteer** 載入 unpacked extension：成本高，適合關鍵路徑 E2E（開啟 dock、關閉）。  
+- **Playwright** 或 **puppeteer** 載入 unpacked extension：成本高，適合關鍵路徑 E2E（開啟 dock、關閉）。
 - **手動測試矩陣**：將 `AGENT.md` E 節整理成 checklist 檔（如 `docs/MANUAL_QA.md`），版本發佈前勾選。
 
 ### 4.4 CI（優先級：低）
@@ -147,14 +147,14 @@ Extension 內建 API（`chrome.*`）宜以 **mock** 或僅測「不依賴 chrome
 
 ## 6. 建議實施順序（路線圖）
 
-| 階段 | 內容 | 預期產出 |
-|------|------|----------|
-| **0** | 新增 `npm run typecheck`；文件連結本計劃 | 每次提交可選跑型別檢查 |
-| **1** | 引入 Vitest（或 Node test）+ 3～5 個針對 curl／workflow 的單元測試 | 核心字串解析有回歸防護 |
+| 階段  | 內容                                                                        | 預期產出                      |
+| ----- | --------------------------------------------------------------------------- | ----------------------------- |
+| **0** | 新增 `npm run typecheck`；文件連結本計劃                                    | 每次提交可選跑型別檢查        |
+| **1** | 引入 Vitest（或 Node test）+ 3～5 個針對 curl／workflow 的單元測試          | 核心字串解析有回歸防護        |
 | **2** | 拆出 `curl`／`workflow-share` 模組 + esbuild `bundle: true` 單一 `panel.js` | `panel.ts` 行數下降、職責清晰 |
-| **3** | `background.ts` + `messages.ts` 共用常數 | 訊息字串單一來源、型別一致 |
-| **4** | 其餘 `panel` 區塊漸進拆分 + 更新 `ARCHITECTURE` 模組表 | 維護與 onboard 成本持續下降 |
-| **5** | （可選）E2E、CI、README | 發版信心與協作效率再提升 |
+| **3** | `background.ts` + `messages.ts` 共用常數                                    | 訊息字串單一來源、型別一致    |
+| **4** | 其餘 `panel` 區塊漸進拆分 + 更新 `ARCHITECTURE` 模組表                      | 維護與 onboard 成本持續下降   |
+| **5** | （可選）E2E、CI、README                                                     | 發版信心與協作效率再提升      |
 
 ---
 
@@ -162,8 +162,8 @@ Extension 內建 API（`chrome.*`）宜以 **mock** 或僅測「不依賴 chrome
 
 不改產品邏輯的前提下，每個合併前仍應執行：
 
-1. `npm run build` 成功，`panel.js` / `content.js` / `panel.css` 與 `manifest` 引用一致。  
-2. `AGENT.md` **E. 標準作業流程** 手動驗證清單（或對應的自動化子集）。  
+1. `npm run build` 成功，`panel.js` / `content.js` / `panel.css` 與 `manifest` 引用一致。
+2. `AGENT.md` **E. 標準作業流程** 手動驗證清單（或對應的自動化子集）。
 3. 若有測試：`npm test` 全綠。
 
 ---

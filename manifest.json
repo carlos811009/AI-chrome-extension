@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "嘗試與 aiii 小幫手對話，建立自己的工作流程",
   "action": {
-    "default_title": "Personal Helper 12231313"
+    "default_title": "Personal Helper"
   },
   "background": {
     "service_worker": "background.js"

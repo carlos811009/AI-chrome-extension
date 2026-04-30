@@ -18,14 +18,8 @@
   var MAX_EXEC_RESULTS = 10;
 
   // src/panel/api-extraction.ts
-  function normalizeParams(value) {
-    if (Array.isArray(value)) {
-      return value.map((v) => String(v).trim()).filter(Boolean);
-    }
-    if (typeof value === "string") {
-      return value.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
-    }
-    return [];
+  function normalizeCurlSmartQuotes(text) {
+    return text.replace(/\u2018/g, "'").replace(/\u2019/g, "'").replace(/\u201a/g, "'").replace(/\u201b/g, "'").replace(/\u201c/g, '"').replace(/\u201d/g, '"').replace(/\u201e/g, '"').replace(/\u2032/g, "'").replace(/\uff07/g, "'").replace(/\uff02/g, '"').replace(/\u00a0/g, " ");
   }
   function inferParamEntries(path, body) {
     const map = /* @__PURE__ */ new Map();
@@ -52,16 +46,47 @@
     }
     return Array.from(map.entries()).map(([key, value]) => ({ key, value }));
   }
+  function looksLikeCurlUrlCandidate(s) {
+    const t = s.trim();
+    if (!t) return false;
+    if (/^\s*\{[^{]/.test(t)) return false;
+    if (/^\s*\[\s*['"{[]/.test(t) || /^\s*\[\s*\]/.test(t)) return false;
+    if (/^[A-Za-z0-9._-]+\s*:\s*\S/.test(t)) return false;
+    if (/^[a-z][a-z0-9+.-]*\/[a-z0-9+._-]+$/i.test(t)) return false;
+    if (/^https?:\/\//i.test(t)) return true;
+    if (t.includes("{{") && t.includes("/")) return true;
+    if (t.startsWith("/")) return true;
+    if (/[/]/.test(t) && t.length >= 2) return true;
+    return false;
+  }
   function extractCurlUrl(text) {
     const normalized = text.replace(/\\\r?\n/g, " ").replace(/\r/g, " ").trim();
-    let m = normalized.match(/\-\-(?:location|url)\s+['"](https?:\/\/[^'"]+)['"]/i);
+    let m = normalized.match(/--(?:location|url)\s+['"](https?:\/\/[^'"]+)['"]/i);
     if (m?.[1]) return m[1].trim();
-    m = normalized.match(/(?:^|\s)\-L\s+['"](https?:\/\/[^'"]+)['"]/i);
+    m = normalized.match(/(?:^|\s)-L\s+['"](https?:\/\/[^'"]+)['"]/i);
     if (m?.[1]) return m[1].trim();
-    const quoted = [...normalized.matchAll(/['"](https?:\/\/[^'"]+)['"]/g)];
-    if (quoted.length > 0) return quoted[0][1].trim();
+    m = normalized.match(/--request\s+[A-Za-z]+\s+'([^']*)'/i);
+    if (m?.[1] && looksLikeCurlUrlCandidate(m[1])) return m[1].trim();
+    m = normalized.match(/--request\s+[A-Za-z]+\s+"((?:[^"\\\\]|\\\\.)*)"/i);
+    if (m?.[1] && looksLikeCurlUrlCandidate(m[1])) return m[1].replace(/\\"/g, '"').trim();
+    m = normalized.match(/(?:^|\s)-X\s+[A-Za-z]+\s+'([^']*)'/i);
+    if (m?.[1] && looksLikeCurlUrlCandidate(m[1])) return m[1].trim();
+    m = normalized.match(/(?:^|\s)-X\s+[A-Za-z]+\s+"((?:[^"\\\\]|\\\\.)*)"/i);
+    if (m?.[1] && looksLikeCurlUrlCandidate(m[1])) return m[1].replace(/\\"/g, '"').trim();
+    m = normalized.match(/--url\s+'([^']*)'/i);
+    if (m?.[1] && looksLikeCurlUrlCandidate(m[1])) return m[1].trim();
+    m = normalized.match(/--url\s+"((?:[^"\\\\]|\\\\.)*)"/i);
+    if (m?.[1] && looksLikeCurlUrlCandidate(m[1])) return m[1].replace(/\\"/g, '"').trim();
+    const quotedHttp = [...normalized.matchAll(/['"](https?:\/\/[^'"]+)['"]/g)];
+    if (quotedHttp.length > 0) return quotedHttp[0][1].trim();
     m = normalized.match(/curl(?:\s+[^\s]+)*\s+(https?:\/\/[^\s'"]+)/i);
     if (m?.[1]) return m[1].trim();
+    const sq = /'([^']*)'/g;
+    let sm;
+    while ((sm = sq.exec(normalized)) !== null) {
+      const inner = sm[1]?.trim() ?? "";
+      if (looksLikeCurlUrlCandidate(inner)) return inner;
+    }
     return "";
   }
   function parseCurlHeadersBlock(text) {
@@ -113,27 +138,35 @@
     return Array.from(/* @__PURE__ */ new Set([...fromPathTemplate, ...fromColonPath, ...fromQuery, ...fromBody]));
   }
   function extractCurlBody(normalized) {
-    const flags = ["--data-raw", "--data", "-d"];
+    const flags = ["--data-raw", "--data-binary", "--data", "-d"];
     for (const flag of flags) {
       const escaped = flag.replace(/-/g, "\\-");
-      const singleQ = new RegExp(`${escaped}\\s+'([^']*)'`);
-      const doubleQ = new RegExp(`${escaped}\\s+"((?:[^"\\\\]|\\\\.)*)"`);
-      let m = normalized.match(singleQ);
-      if (m) return m[1];
-      m = normalized.match(doubleQ);
-      if (m) return m[1].replace(/\\"/g, '"');
+      const tries = [
+        { re: new RegExp(`${escaped}\\s+'([^']*)'`), unescapeDouble: false },
+        { re: new RegExp(`${escaped}\\s+"((?:[^"\\\\]|\\\\.)*)"`), unescapeDouble: true },
+        { re: new RegExp(`${escaped}\\s*=\\s*'([^']*)'`), unescapeDouble: false },
+        { re: new RegExp(`${escaped}\\s*=\\s*"((?:[^"\\\\]|\\\\.)*)"`), unescapeDouble: true }
+      ];
+      for (const { re, unescapeDouble } of tries) {
+        const m = normalized.match(re);
+        if (m?.[1] != null) {
+          let s = m[1];
+          if (unescapeDouble) s = s.replace(/\\"/g, '"');
+          return s;
+        }
+      }
     }
     return "";
   }
   function parseCurlCommand(curlText) {
-    const text = curlText.trim();
+    const text = normalizeCurlSmartQuotes(curlText.trim());
     if (!/^curl\b/i.test(text)) return null;
     const normalized = text.replace(/\\\r?\n/g, " ").replace(/\r/g, " ");
-    const methodMatch = normalized.match(/(?:\s|^)-X\s+([A-Z]+)/i);
+    const methodMatch = normalized.match(/(?:\s|^)-X\s+([A-Z]+)(?=\s|$)/i) || normalized.match(/(?:\s|^)--request\s+([A-Z]+)(?=\s|$)/i);
     const method = (methodMatch?.[1] || "").toUpperCase();
-    const rawUrl = extractCurlUrl(text);
+    const rawUrl = extractCurlUrl(normalized);
     if (!rawUrl) return null;
-    const headers = parseCurlHeadersBlock(text);
+    const headers = parseCurlHeadersBlock(normalized);
     const body = extractCurlBody(normalized);
     const bearerRaw = headers.Authorization || headers.authorization || "";
     const bearerToken = /^Bearer\s+/i.test(bearerRaw) ? bearerRaw.replace(/^Bearer\s+/i, "").trim() : "";
@@ -152,6 +185,7 @@
     const add = (raw) => {
       const t = raw.trim();
       if (t.length < 10 || !/^curl\b/i.test(t)) return;
+      if (!parseCurlCommand(t)) return;
       if (seen.has(t)) return;
       seen.add(t);
       out.push(t);
@@ -270,90 +304,12 @@
       const parsed = parseCurlCommand(snippet);
       if (parsed) upsert(apiSpecFromParsedCurl(parsed));
     }
-    const jsonBlocks = Array.from(text.matchAll(/```json([\s\S]*?)```/g));
-    for (const block of jsonBlocks) {
-      const raw = block[1]?.trim();
-      if (!raw) continue;
-      try {
-        const parsed = JSON.parse(raw);
-        const list = Array.isArray(parsed) ? parsed : parsed && typeof parsed === "object" && Array.isArray(parsed.apis) ? parsed.apis : [];
-        for (const item of list) {
-          if (!item || typeof item !== "object") continue;
-          const obj = item;
-          const api = String(obj.api || obj.name || obj.id || obj.path || "").trim();
-          if (!api) continue;
-          const purpose = String(obj.purpose || obj.description || "\u5F85\u88DC\u5145\u76EE\u7684").trim();
-          const params = normalizeParams(obj.params || obj.requiredParams || obj.arguments);
-          const path = String(obj.path || obj.endpoint || "").trim() || void 0;
-          const requestName = String(obj.requestName || obj.request || "").trim() || void 0;
-          const mRaw = obj.method ?? obj.httpMethod ?? obj.verb;
-          const method = typeof mRaw === "string" && mRaw.trim() ? mRaw.trim().toUpperCase() : void 0;
-          let bodyTemplate;
-          if (typeof obj.body === "string") bodyTemplate = obj.body;
-          else if (typeof obj.bodyTemplate === "string") bodyTemplate = obj.bodyTemplate;
-          else if (obj.body && typeof obj.body === "object" && !Array.isArray(obj.body)) {
-            try {
-              bodyTemplate = JSON.stringify(obj.body, null, 2);
-            } catch {
-              bodyTemplate = void 0;
-            }
-          }
-          let headers;
-          if (obj.headers && typeof obj.headers === "object" && !Array.isArray(obj.headers)) {
-            headers = {};
-            for (const [k, v] of Object.entries(obj.headers)) {
-              if (typeof v === "string") headers[k] = v;
-            }
-          }
-          upsert({
-            api: path || api,
-            path,
-            requestName,
-            purpose,
-            params,
-            ...method ? { method } : {},
-            ...bodyTemplate ? { bodyTemplate } : {},
-            ...headers && Object.keys(headers).length ? { headers } : {}
-          });
-        }
-      } catch {
-      }
-    }
-    const requestMatches = Array.from(text.matchAll(/([A-Za-z][A-Za-z0-9]+Request)\s*\{([\s\S]{0,220}?)\}/g));
-    for (const match of requestMatches) {
-      const requestName = match[1];
-      const fieldBlock = match[2] || "";
-      const typedFields = Array.from(fieldBlock.matchAll(/\b([A-Za-z_][A-Za-z0-9_]*)\s*:/g)).map((m) => m[1]);
-      const nearbyText = text.slice(Math.max(0, (match.index || 0) - 300), (match.index || 0) + 300);
-      const pathCandidates = Array.from(nearbyText.matchAll(/`([A-Za-z][\w-]*(?:\/[A-Za-z][\w-]*)+)`/g));
-      const path = pathCandidates.length ? pathCandidates[pathCandidates.length - 1][1] : "";
-      const bulletFields = Array.from(
-        text.slice(match.index || 0, (match.index || 0) + 400).matchAll(/^\s*[-*]\s*`?([A-Za-z_][A-Za-z0-9_]*)`?/gm)
-      ).map((m) => m[1]);
-      const purpose = path ? `\u5C0D\u61C9\u8ACB\u6C42\uFF1A${requestName}` : `\u8ACB\u6C42\u6A21\u578B\uFF1A${requestName}`;
-      upsert({
-        api: path || requestName,
-        path: path || void 0,
-        requestName,
-        purpose,
-        params: [...typedFields, ...bulletFields]
-      });
-    }
-    if (!specs.size) {
-      const tokenRegex = /\b([a-zA-Z][\w-]*(?:[./][a-zA-Z][\w-]*)+)\b/g;
-      let match;
-      while ((match = tokenRegex.exec(text)) !== null) {
-        const api = match[1];
-        if (api.length < 4) continue;
-        upsert({ api, path: api.includes("/") ? api : void 0, purpose: "\u5F85\u88DC\u5145\u76EE\u7684", params: [] });
-        if (specs.size >= 20) break;
-      }
-    }
     return Array.from(specs.values()).slice(0, 20);
   }
 
   // src/messages.ts
   var CLOSE_HELLO_DOCK = "CLOSE_HELLO_DOCK";
+  var PANEL_TO_HOST_SOURCE = "personalExtDockPanel";
 
   // src/panel.ts
   function isAllowedAiiiEmail(email) {
@@ -372,6 +328,11 @@
   var authStatusEl = document.getElementById("authStatus");
   var authorizeGoogleButton = document.getElementById("authorizeGoogle");
   var closeDockButton = document.getElementById("closeDock");
+  var dockShellDragGripEl = document.getElementById("dockShellDragGrip");
+  var minimizeDockButton = document.getElementById("minimizeDock");
+  var openPanelSettingsButton = document.getElementById("openPanelSettings");
+  var panelSettingsOverlayEl = document.getElementById("panelSettingsOverlay");
+  var closePanelSettingsButton = document.getElementById("closePanelSettings");
   var oauthInfoEl = document.getElementById("oauthInfo");
   var toggleWorkflowsButton = document.getElementById("toggleWorkflows");
   var workflowPanelEl = document.getElementById("workflowPanel");
@@ -413,7 +374,6 @@
   var savedApisListEl = document.getElementById("savedApisList");
   var toggleSavedWorkflowsButton = document.getElementById("toggleSavedWorkflows");
   var savedWorkflowsPanelEl = document.getElementById("savedWorkflowsPanel");
-  var executionResultSectionEl = document.getElementById("executionResultSection");
   var toggleExecutionResultButton = document.getElementById("toggleExecutionResult");
   var executionResultPanelEl = document.getElementById("executionResultPanel");
   var executionResultListEl = document.getElementById("executionResultList");
@@ -425,6 +385,16 @@
   var importWorkflowToDraftButton = document.getElementById("importWorkflowToDraft");
   var execResults = [];
   var messages = [];
+  var streamingAssistantIndex = null;
+  var streamJustFinishedIndex = null;
+  var streamJustFinishedClearTimer = null;
+  function clearStreamJustFinishedTimer() {
+    if (streamJustFinishedClearTimer !== null) {
+      clearTimeout(streamJustFinishedClearTimer);
+      streamJustFinishedClearTimer = null;
+    }
+  }
+  var persistenceReady = false;
   var isAuthorized = false;
   var firebaseIdToken = "";
   var googleAccessToken = "";
@@ -558,6 +528,26 @@
       }, autoDismissMs);
     }
   }
+  function bindChatMarkdownCopyOnce() {
+    const g = globalThis;
+    if (g.__personalExtMdCopy) return;
+    g.__personalExtMdCopy = true;
+    chatMessagesEl.addEventListener("click", (ev) => {
+      const btn = ev.target.closest("button.md-code-copy");
+      if (!btn || !chatMessagesEl.contains(btn)) return;
+      const id = btn.getAttribute("data-copy");
+      const el = id ? document.getElementById(id) : null;
+      const txt = el?.textContent ?? "";
+      if (!txt.trim()) {
+        setToast("\u6B64\u5340\u584A\u6C92\u6709\u53EF\u8907\u88FD\u6587\u5B57", "error");
+        return;
+      }
+      void navigator.clipboard.writeText(txt).then(
+        () => setToast("\u5DF2\u8907\u88FD\u5230\u526A\u8CBC\u7C3F", "ok", 2200),
+        () => setToast("\u8907\u88FD\u5931\u6557\uFF0C\u8ACB\u624B\u52D5\u9078\u53D6\u5167\u5BB9", "error")
+      );
+    });
+  }
   function setOAuthInfo(text) {
     oauthInfoEl.textContent = text;
   }
@@ -588,11 +578,13 @@
     chatPanelOpen = open;
     chatPanelEl.classList.toggle("collapsed", !open);
     toggleChatButton.textContent = open ? "AI \u5C0F\u5E6B\u624B \u25BE" : "AI \u5C0F\u5E6B\u624B \u25B8";
+    chatPanelEl.closest("section.chat-section")?.classList.toggle("is-section-collapsed", !open);
   }
   function setWorkflowPanelOpen(open) {
     workflowPanelOpen = open;
     workflowPanelEl.classList.toggle("collapsed", !open);
     updateWorkflowToggleLabel();
+    workflowPanelEl.closest("section.workflow-section")?.classList.toggle("is-section-collapsed", !open);
   }
   function setChatEnabled(enabled) {
     chatInputEl.disabled = !enabled;
@@ -620,6 +612,29 @@
     "X-Request-Id",
     "Cookie"
   ];
+  var MANUAL_API_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+  var MANUAL_API_PARAM_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+  var MANUAL_HTTP_HEADER_NAME_RE = /^[-0-9A-Za-z!#$%&'*+.^_`|~]+$/;
+  function isManualApiPathWellFormed(path) {
+    const t = path.trim();
+    if (!t) return false;
+    try {
+      const u = new URL(t);
+      return u.protocol === "http:" || u.protocol === "https:";
+    } catch {
+      return false;
+    }
+  }
+  function isManualApiBodyWellFormed(body) {
+    const t = body.trim();
+    if (!t) return true;
+    try {
+      JSON.parse(body);
+      return true;
+    } catch {
+      return false;
+    }
+  }
   function buildHeaderKeySelect(selectedKey) {
     const select = document.createElement("select");
     select.className = "header-key-select";
@@ -850,17 +865,98 @@
     purposeWrap.appendChild(purposeInput);
     apiDetailPurposeEl.appendChild(purposeWrap);
     const container = document.createDocumentFragment();
+    const requestCard = document.createElement("div");
+    requestCard.className = "api-detail-request-card";
+    const rqTitle = document.createElement("div");
+    rqTitle.className = "api-detail-request-title";
+    rqTitle.textContent = "\u9023\u7DDA\u8207\u7AEF\u9EDE";
+    requestCard.appendChild(rqTitle);
+    const initialTarget = (spec.path ?? spec.api ?? "").trim();
+    const pathSplit = splitRequestTargetForEditor(initialTarget);
+    const methodRow = document.createElement("div");
+    methodRow.className = "api-detail-request-row";
+    const methodLabel = document.createElement("label");
+    methodLabel.className = "api-detail-purpose-label";
+    methodLabel.setAttribute("for", "apiDetailMethodSelect");
+    methodLabel.textContent = "HTTP \u65B9\u6CD5";
+    const methodSelect = document.createElement("select");
+    methodSelect.id = "apiDetailMethodSelect";
+    methodSelect.className = "api-detail-method-select";
+    const allowedMethods = ["GET", "POST", "PUT", "PATCH", "DELETE"];
+    const methodUpper = (spec.method || "GET").toUpperCase();
+    allowedMethods.forEach((m) => {
+      const o = document.createElement("option");
+      o.value = m;
+      o.textContent = m;
+      methodSelect.appendChild(o);
+    });
+    if (!allowedMethods.includes(methodUpper)) {
+      const o = document.createElement("option");
+      o.value = methodUpper;
+      o.textContent = methodUpper;
+      methodSelect.appendChild(o);
+    }
+    methodSelect.value = methodUpper;
+    methodRow.appendChild(methodLabel);
+    methodRow.appendChild(methodSelect);
+    requestCard.appendChild(methodRow);
+    const baseRow = document.createElement("div");
+    baseRow.className = "api-detail-request-row";
+    const baseLabel = document.createElement("label");
+    baseLabel.className = "api-detail-purpose-label";
+    baseLabel.setAttribute("for", "apiDetailBaseUrlInput");
+    baseLabel.textContent = "\u7DB2\u57DF\uFF0F\u57FA\u5E95 URL";
+    const baseInput = document.createElement("input");
+    baseInput.id = "apiDetailBaseUrlInput";
+    baseInput.type = "text";
+    baseInput.className = "api-detail-purpose-input";
+    baseInput.placeholder = "https://api.example.com\uFF08\u76F8\u5C0D\u8DEF\u5F91\u53EF\u7559\u7A7A\uFF09";
+    baseInput.value = pathSplit.base;
+    baseInput.autocomplete = "off";
+    baseRow.appendChild(baseLabel);
+    baseRow.appendChild(baseInput);
+    requestCard.appendChild(baseRow);
+    const pathRow = document.createElement("div");
+    pathRow.className = "api-detail-request-row";
+    const pathLabel = document.createElement("label");
+    pathLabel.className = "api-detail-purpose-label";
+    pathLabel.setAttribute("for", "apiDetailPathInput");
+    pathLabel.textContent = "\u8DEF\u5F91\u8207\u67E5\u8A62";
+    const pathInput = document.createElement("input");
+    pathInput.id = "apiDetailPathInput";
+    pathInput.type = "text";
+    pathInput.className = "api-detail-purpose-input";
+    pathInput.placeholder = "\u4F8B\u5982 /v1/foo\u3001siteId/med-sales \u6216 ?a=1&b=2";
+    pathInput.value = pathSplit.pathAndQuery;
+    pathInput.autocomplete = "off";
+    pathRow.appendChild(pathLabel);
+    pathRow.appendChild(pathInput);
+    requestCard.appendChild(pathRow);
     const urlCode = document.createElement("code");
-    urlCode.className = "detail-url-code";
-    urlCode.textContent = `${spec.method ?? "GET"} ${spec.path ?? spec.api ?? "-"}`;
-    container.appendChild(urlCode);
+    urlCode.className = "detail-url-code detail-url-code--preview";
+    const refreshRequestPreview = () => {
+      if (!editedDetailSpec) return;
+      editedDetailSpec.method = methodSelect.value;
+      const joined = joinRequestTargetFromEditor(baseInput.value, pathInput.value);
+      editedDetailSpec.path = joined;
+      urlCode.textContent = `${(methodSelect.value || "GET").toUpperCase()} ${joined || "-"}`;
+    };
+    methodSelect.addEventListener("change", refreshRequestPreview);
+    baseInput.addEventListener("input", refreshRequestPreview);
+    pathInput.addEventListener("input", refreshRequestPreview);
+    refreshRequestPreview();
+    const previewLabel = document.createElement("div");
+    previewLabel.className = "api-detail-preview-label";
+    previewLabel.textContent = "\u5BE6\u969B\u8ACB\u6C42\uFF08\u9810\u89BD\uFF09";
+    requestCard.appendChild(previewLabel);
+    requestCard.appendChild(urlCode);
+    container.appendChild(requestCard);
     const urlParamObj = {};
     try {
-      const qIdx = (spec.path ?? spec.api ?? "").indexOf("?");
-      if (qIdx >= 0)
-        new URLSearchParams((spec.path ?? spec.api ?? "").slice(qIdx + 1)).forEach((v, k) => {
-          urlParamObj[k] = v;
-        });
+      const { queryString: initialQs } = getPathNoQueryAndSearchFromCombined(initialTarget);
+      new URLSearchParams(initialQs).forEach((v, k) => {
+        if (k) urlParamObj[k] = v;
+      });
     } catch {
     }
     const urlParamKeys = [...new Set(Object.keys(urlParamObj))];
@@ -870,18 +966,28 @@
     const rebuildUrlParams = () => {
       if (!editedDetailSpec) return;
       try {
-        const base = (editedDetailSpec.path ?? editedDetailSpec.api ?? "").split("?")[0];
+        const combined = (editedDetailSpec.path ?? editedDetailSpec.api ?? "").trim();
+        const { pathNoQuery, queryString } = getPathNoQueryAndSearchFromCombined(combined);
         const collected = {};
+        try {
+          new URLSearchParams(queryString).forEach((v, k) => {
+            if (k) collected[k] = v;
+          });
+        } catch {
+        }
         urlParamsList.querySelectorAll(".detail-edit-row").forEach((r) => {
           const key = r.querySelector(".detail-edit-key-input")?.value.trim() ?? "";
           const val = r.querySelector(".detail-edit-val-input")?.value ?? "";
           if (key && val) collected[key] = val;
         });
         const qs = new URLSearchParams(collected).toString();
-        const newPath = qs ? `${base}?${qs}` : base;
+        const newPath = qs ? `${pathNoQuery}?${qs}` : pathNoQuery;
         editedDetailSpec.path = newPath;
         editedDetailSpec.params = Array.from(/* @__PURE__ */ new Set([...editedDetailSpec.params ?? [], ...Object.keys(collected)]));
-        urlCode.textContent = `${editedDetailSpec.method ?? "GET"} ${newPath}`;
+        urlCode.textContent = `${(methodSelect.value || editedDetailSpec.method || "GET").toString().toUpperCase()} ${newPath}`;
+        const sp = splitRequestTargetForEditor(newPath);
+        baseInput.value = sp.base;
+        pathInput.value = sp.pathAndQuery;
       } catch {
       }
     };
@@ -1656,8 +1762,60 @@
   function escapeHtml(text) {
     return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
-  function renderAssistantMarkdown(text) {
-    const escaped = escapeHtml(text);
+  function splitRequestTargetForEditor(raw) {
+    const s = (raw || "").trim();
+    if (!s) return { base: "", pathAndQuery: "" };
+    if (/^https?:\/\//i.test(s)) {
+      try {
+        const u = new URL(s);
+        return { base: u.origin, pathAndQuery: `${u.pathname}${u.search}` || "/" };
+      } catch {
+        return { base: "", pathAndQuery: s };
+      }
+    }
+    return { base: "", pathAndQuery: s };
+  }
+  function joinRequestTargetFromEditor(base, pathAndQuery) {
+    const b = (base || "").trim();
+    const p = (pathAndQuery || "").trim();
+    if (!b) return p;
+    if (!p) return b;
+    const baseClean = b.replace(/\/+$/, "");
+    let pathPart = p;
+    if (pathPart.startsWith("?")) {
+      pathPart = `/${pathPart}`;
+    } else {
+      pathPart = pathPart.replace(/^\/+/, "");
+    }
+    if (/^https?:\/\//i.test(baseClean)) {
+      try {
+        const joinBase = baseClean.endsWith("/") ? baseClean : `${baseClean}/`;
+        return new URL(pathPart, joinBase).toString();
+      } catch {
+        return `${baseClean}/${pathPart}`;
+      }
+    }
+    return `${baseClean}/${pathPart}`;
+  }
+  function getPathNoQueryAndSearchFromCombined(combined) {
+    const s = (combined || "").trim();
+    if (!s) return { pathNoQuery: "", queryString: "" };
+    if (/^https?:\/\//i.test(s)) {
+      try {
+        const u = new URL(s);
+        return {
+          pathNoQuery: `${u.origin}${u.pathname}`,
+          queryString: u.searchParams.toString()
+        };
+      } catch {
+      }
+    }
+    const qIdx = s.indexOf("?");
+    if (qIdx < 0) return { pathNoQuery: s, queryString: "" };
+    return { pathNoQuery: s.slice(0, qIdx), queryString: s.slice(qIdx + 1) };
+  }
+  var markdownCodeBlockSeq = 0;
+  function renderMarkdownFromEscapedBlocks(escaped) {
     const blocks = escaped.split(/\n{2,}/);
     return blocks.map((block) => {
       const trimmed = block.trim();
@@ -1679,6 +1837,31 @@
       const paragraph = trimmed.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/`([^`]+?)`/g, "<code>$1</code>").replace(/\n/g, "<br>");
       return `<p>${paragraph}</p>`;
     }).filter(Boolean).join("");
+  }
+  function renderAssistantMarkdown(text) {
+    const parts = [];
+    const fenceRe = /```([^\n`]*)\r?\n([\s\S]*?)```/g;
+    let last = 0;
+    let m;
+    while ((m = fenceRe.exec(text)) !== null) {
+      const before = text.slice(last, m.index);
+      if (before.trim()) {
+        parts.push(renderMarkdownFromEscapedBlocks(escapeHtml(before)));
+      }
+      const lang = (m[1] || "").trim();
+      const rawCode = m[2].replace(/\n$/, "");
+      const id = `md-code-${markdownCodeBlockSeq++}`;
+      const langHtml = escapeHtml(lang || "bash");
+      parts.push(
+        `<div class="md-code-wrap"><div class="md-code-toolbar"><span class="md-code-lang">${langHtml}</span><button type="button" class="md-code-copy" data-copy="${id}" title="\u8907\u88FD\u6B64\u5340\u584A">\u8907\u88FD</button></div><pre class="md-code-pre" id="${id}"><code>${escapeHtml(rawCode)}</code></pre></div>`
+      );
+      last = m.index + m[0].length;
+    }
+    const tail = text.slice(last);
+    if (tail.trim()) {
+      parts.push(renderMarkdownFromEscapedBlocks(escapeHtml(tail)));
+    }
+    return parts.join("");
   }
   async function callAgentChatApiStream(message, onDelta) {
     if (!firebaseIdToken) {
@@ -1785,126 +1968,189 @@
     if (!messages.length) {
       const empty = document.createElement("div");
       empty.className = "empty-tip";
-      empty.textContent = "";
+      empty.textContent = "\u5C1A\u7121\u8A0A\u606F\u3002\u5728\u4E0B\u65B9\u8F38\u5165\u554F\u984C\u5F8C\u6309\u300C\u9001\u51FA\u300D\u5373\u53EF\u958B\u59CB\u8207 Agent \u5C0D\u8A71\u3002";
       chatMessagesEl.appendChild(empty);
+      chatMessagesEl.classList.remove("chat-messages--streaming");
       return;
     }
-    messages.forEach((message) => {
+    messages.forEach((message, index) => {
       const row = document.createElement("div");
       row.className = `message-row ${message.role}`;
+      const isStreamingAssistant = message.role === "assistant" && index === streamingAssistantIndex;
+      const streamBubbleEmpty = isStreamingAssistant && !message.content.trim();
+      if (message.role === "assistant" && index === streamingAssistantIndex) {
+        row.classList.add("message-row--streaming");
+      }
+      if (message.role === "assistant" && index === streamJustFinishedIndex) {
+        row.classList.add("message-row--stream-done");
+      }
       const bubble = document.createElement("div");
       bubble.className = "message-bubble";
       if (message.role === "assistant") {
         bubble.classList.add("markdown");
-        bubble.innerHTML = renderAssistantMarkdown(message.content);
+        if (streamBubbleEmpty) {
+          bubble.classList.add("message-bubble--stream-wait");
+          const wait = document.createElement("div");
+          wait.className = "stream-wait-lines";
+          wait.setAttribute("aria-hidden", "true");
+          for (let i = 0; i < 3; i += 1) {
+            const bar = document.createElement("span");
+            bar.className = "stream-wait-bar";
+            wait.appendChild(bar);
+          }
+          bubble.appendChild(wait);
+        } else {
+          bubble.innerHTML = renderAssistantMarkdown(message.content);
+        }
+        if (isStreamingAssistant) {
+          const cursor = document.createElement("span");
+          cursor.className = "assistant-stream-cursor";
+          cursor.setAttribute("aria-hidden", "true");
+          bubble.appendChild(cursor);
+        }
       } else {
         bubble.textContent = message.content;
       }
       const meta = document.createElement("div");
       meta.className = "message-meta";
-      meta.textContent = `${message.role === "user" ? "\u4F60" : "Agent"} \xB7 ${message.at}`;
+      if (message.role === "assistant" && index === streamingAssistantIndex) {
+        meta.classList.add("message-meta--streaming");
+        const badge = document.createElement("span");
+        badge.className = "message-meta-badge message-meta-badge--pulse";
+        badge.textContent = "LIVE";
+        meta.appendChild(badge);
+        meta.appendChild(document.createTextNode(" \u6B63\u5728\u7522\u751F\u56DE\u61C9"));
+        const typing = document.createElement("span");
+        typing.className = "typing-indicator";
+        typing.setAttribute("aria-hidden", "true");
+        for (let i = 0; i < 3; i += 1) {
+          const dot = document.createElement("span");
+          dot.className = "typing-dot";
+          typing.appendChild(dot);
+        }
+        meta.appendChild(typing);
+      } else if (message.role === "assistant" && index === streamJustFinishedIndex) {
+        meta.classList.add("message-meta--done");
+        meta.textContent = `Agent \xB7 \u5DF2\u56DE\u61C9\u5B8C\u7562 \xB7 ${message.at}`;
+      } else {
+        meta.textContent = `${message.role === "user" ? "\u4F60" : "Agent"} \xB7 ${message.at}`;
+      }
       row.appendChild(bubble);
       row.appendChild(meta);
       chatMessagesEl.appendChild(row);
     });
+    chatMessagesEl.classList.toggle("chat-messages--streaming", streamingAssistantIndex !== null);
     chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
   }
   async function loadMessages() {
+    persistenceReady = false;
     const storageLocal = extensionChrome?.storage?.local;
-    const saved = storageLocal ? await storageLocal.get([
-      STORAGE_KEY,
-      SESSION_ID_KEY,
-      WORKFLOWS_KEY,
-      AUTH_STATE_KEY,
-      CUSTOM_APIS_KEY,
-      EXEC_RESULTS_KEY
-    ]) : {
-      [STORAGE_KEY]: fallbackStorage.get(STORAGE_KEY),
-      [SESSION_ID_KEY]: fallbackStorage.get(SESSION_ID_KEY),
-      [WORKFLOWS_KEY]: fallbackStorage.get(WORKFLOWS_KEY),
-      [AUTH_STATE_KEY]: fallbackStorage.get(AUTH_STATE_KEY),
-      [CUSTOM_APIS_KEY]: fallbackStorage.get(CUSTOM_APIS_KEY),
-      [EXEC_RESULTS_KEY]: fallbackStorage.get(EXEC_RESULTS_KEY)
-    };
-    setAuthStatus("\u5C1A\u672A\u6388\u6B0A\uFF0C\u8ACB\u5148\u6309\u300CGoogle \u6388\u6B0A\u300D\u3002", "normal");
-    setChatEnabled(false);
-    if (typeof saved[SESSION_ID_KEY] === "string" && saved[SESSION_ID_KEY]) {
-      chatSessionId = saved[SESSION_ID_KEY];
-    }
-    if (saved[STORAGE_KEY]) {
-      try {
-        const parsed = JSON.parse(saved[STORAGE_KEY]);
-        if (Array.isArray(parsed)) {
-          messages = parsed.slice(-MAX_MESSAGES).filter((item) => {
-            return Boolean(item) && typeof item === "object" && item.role !== void 0 && typeof item.content === "string" && typeof item.at === "string";
-          });
-        }
-      } catch {
-        messages = [];
-      }
-    }
-    if (saved[WORKFLOWS_KEY]) {
-      try {
-        const parsedWorkflows = JSON.parse(saved[WORKFLOWS_KEY]);
-        if (Array.isArray(parsedWorkflows)) {
-          savedWorkflows = parsedWorkflows.filter((item) => Boolean(item) && typeof item === "object").map((item) => {
-            const legacySteps = Array.isArray(item.apis) ? item.apis.map((api) => String(api || "").trim()).filter(Boolean).map((api) => ({ api, purpose: "\u5F85\u88DC\u5145\u76EE\u7684", params: [] })) : [];
-            const steps = Array.isArray(item.steps) ? item.steps.filter((step) => step && typeof step.api === "string").map((step) => ({
-              api: step.api,
-              path: typeof step.path === "string" ? step.path : void 0,
-              requestName: typeof step.requestName === "string" ? step.requestName : void 0,
-              method: typeof step.method === "string" ? step.method : void 0,
-              headers: step.headers && typeof step.headers === "object" ? { ...step.headers } : {},
-              bodyTemplate: typeof step.bodyTemplate === "string" ? step.bodyTemplate : "",
-              bearerToken: typeof step.bearerToken === "string" ? step.bearerToken : "",
-              purpose: typeof step.purpose === "string" ? step.purpose : "\u5F85\u88DC\u5145\u76EE\u7684",
-              params: Array.isArray(step.params) ? step.params.map((p) => String(p)) : []
-            })) : legacySteps;
-            return {
-              id: typeof item.id === "string" ? item.id : `wf-${Date.now()}`,
-              name: typeof item.name === "string" ? item.name : "\u672A\u547D\u540D\u6D41\u7A0B",
-              steps
-            };
-          });
-        }
-      } catch {
-        savedWorkflows = [];
-      }
-    }
-    if (saved[CUSTOM_APIS_KEY]) {
-      try {
-        const parsedCustomApis = JSON.parse(saved[CUSTOM_APIS_KEY]);
-        if (Array.isArray(parsedCustomApis)) {
-          customApiSpecs = parsedCustomApis.filter((item) => item && typeof item.api === "string").map((item) => ({
-            api: item.api,
-            path: typeof item.path === "string" ? item.path : void 0,
-            requestName: typeof item.requestName === "string" ? item.requestName : void 0,
-            method: typeof item.method === "string" ? item.method : void 0,
-            headers: item.headers && typeof item.headers === "object" ? item.headers : {},
-            bodyTemplate: typeof item.bodyTemplate === "string" ? item.bodyTemplate : "",
-            bearerToken: typeof item.bearerToken === "string" ? item.bearerToken : "",
-            purpose: typeof item.purpose === "string" ? item.purpose : "",
-            params: Array.isArray(item.params) ? item.params.map((p) => String(p)) : []
-          }));
-        }
-      } catch {
-        customApiSpecs = [];
-      }
-    }
-    renderMessages();
-    refreshApiCandidatesFromLatestAssistant();
-    renderDraftSteps();
-    renderSavedWorkflows();
-    renderSavedApis();
+    let saved;
     try {
-      if (typeof saved[EXEC_RESULTS_KEY] === "string" && saved[EXEC_RESULTS_KEY]) {
-        const parsed = JSON.parse(saved[EXEC_RESULTS_KEY]);
-        if (Array.isArray(parsed)) execResults = parsed.slice(0, MAX_EXEC_RESULTS);
-      }
-    } catch {
-      execResults = [];
+      saved = storageLocal ? await storageLocal.get([
+        STORAGE_KEY,
+        SESSION_ID_KEY,
+        WORKFLOWS_KEY,
+        AUTH_STATE_KEY,
+        CUSTOM_APIS_KEY,
+        EXEC_RESULTS_KEY
+      ]) : {
+        [STORAGE_KEY]: fallbackStorage.get(STORAGE_KEY),
+        [SESSION_ID_KEY]: fallbackStorage.get(SESSION_ID_KEY),
+        [WORKFLOWS_KEY]: fallbackStorage.get(WORKFLOWS_KEY),
+        [AUTH_STATE_KEY]: fallbackStorage.get(AUTH_STATE_KEY),
+        [CUSTOM_APIS_KEY]: fallbackStorage.get(CUSTOM_APIS_KEY),
+        [EXEC_RESULTS_KEY]: fallbackStorage.get(EXEC_RESULTS_KEY)
+      };
+    } catch (err) {
+      console.error("[personal-extension] loadMessages: storage.get failed", err);
+      saved = {};
     }
-    renderExecResults();
+    try {
+      setAuthStatus("\u5C1A\u672A\u6388\u6B0A\uFF0C\u8ACB\u5148\u6309\u300CGoogle \u6388\u6B0A\u300D\u3002", "normal");
+      setChatEnabled(false);
+      if (typeof saved[SESSION_ID_KEY] === "string" && saved[SESSION_ID_KEY]) {
+        chatSessionId = saved[SESSION_ID_KEY];
+      }
+      if (saved[STORAGE_KEY]) {
+        try {
+          const parsed = JSON.parse(saved[STORAGE_KEY]);
+          if (Array.isArray(parsed)) {
+            messages = parsed.slice(-MAX_MESSAGES).filter((item) => {
+              return Boolean(item) && typeof item === "object" && item.role !== void 0 && typeof item.content === "string" && typeof item.at === "string";
+            });
+          }
+        } catch {
+          messages = [];
+        }
+      }
+      if (saved[WORKFLOWS_KEY]) {
+        try {
+          const parsedWorkflows = JSON.parse(saved[WORKFLOWS_KEY]);
+          if (Array.isArray(parsedWorkflows)) {
+            savedWorkflows = parsedWorkflows.filter((item) => Boolean(item) && typeof item === "object").map((item) => {
+              const legacySteps = Array.isArray(item.apis) ? item.apis.map((api) => String(api || "").trim()).filter(Boolean).map((api) => ({ api, purpose: "\u5F85\u88DC\u5145\u76EE\u7684", params: [] })) : [];
+              const steps = Array.isArray(item.steps) ? item.steps.filter((step) => step && typeof step.api === "string").map((step) => ({
+                api: step.api,
+                path: typeof step.path === "string" ? step.path : void 0,
+                requestName: typeof step.requestName === "string" ? step.requestName : void 0,
+                method: typeof step.method === "string" ? step.method : void 0,
+                headers: step.headers && typeof step.headers === "object" ? { ...step.headers } : {},
+                bodyTemplate: typeof step.bodyTemplate === "string" ? step.bodyTemplate : "",
+                bearerToken: typeof step.bearerToken === "string" ? step.bearerToken : "",
+                purpose: typeof step.purpose === "string" ? step.purpose : "\u5F85\u88DC\u5145\u76EE\u7684",
+                params: Array.isArray(step.params) ? step.params.map((p) => String(p)) : []
+              })) : legacySteps;
+              return {
+                id: typeof item.id === "string" ? item.id : `wf-${Date.now()}`,
+                name: typeof item.name === "string" ? item.name : "\u672A\u547D\u540D\u6D41\u7A0B",
+                steps
+              };
+            });
+          }
+        } catch {
+          savedWorkflows = [];
+        }
+      }
+      if (saved[CUSTOM_APIS_KEY]) {
+        try {
+          const parsedCustomApis = JSON.parse(saved[CUSTOM_APIS_KEY]);
+          if (Array.isArray(parsedCustomApis)) {
+            customApiSpecs = parsedCustomApis.filter((item) => item && typeof item.api === "string").map((item) => ({
+              api: item.api,
+              path: typeof item.path === "string" ? item.path : void 0,
+              requestName: typeof item.requestName === "string" ? item.requestName : void 0,
+              method: typeof item.method === "string" ? item.method : void 0,
+              headers: item.headers && typeof item.headers === "object" ? item.headers : {},
+              bodyTemplate: typeof item.bodyTemplate === "string" ? item.bodyTemplate : "",
+              bearerToken: typeof item.bearerToken === "string" ? item.bearerToken : "",
+              purpose: typeof item.purpose === "string" ? item.purpose : "",
+              params: Array.isArray(item.params) ? item.params.map((p) => String(p)) : []
+            }));
+          }
+        } catch {
+          customApiSpecs = [];
+        }
+      }
+      renderMessages();
+      refreshApiCandidatesFromLatestAssistant();
+      renderDraftSteps();
+      renderSavedWorkflows();
+      renderSavedApis();
+      try {
+        if (typeof saved[EXEC_RESULTS_KEY] === "string" && saved[EXEC_RESULTS_KEY]) {
+          const parsed = JSON.parse(saved[EXEC_RESULTS_KEY]);
+          if (Array.isArray(parsed)) execResults = parsed.slice(0, MAX_EXEC_RESULTS);
+        }
+      } catch {
+        execResults = [];
+      }
+      renderExecResults();
+    } catch (err) {
+      console.error("[personal-extension] loadMessages: restore UI failed", err);
+    } finally {
+      persistenceReady = true;
+    }
     if (typeof saved[AUTH_STATE_KEY] === "string" && saved[AUTH_STATE_KEY]) {
       try {
         const parsed = JSON.parse(saved[AUTH_STATE_KEY]);
@@ -1944,6 +2190,7 @@
     syncPanelBodyAuthLock();
   }
   async function saveMessages() {
+    if (!persistenceReady) return;
     const data = {
       [STORAGE_KEY]: JSON.stringify(messages.slice(-MAX_MESSAGES)),
       [SESSION_ID_KEY]: chatSessionId,
@@ -2391,10 +2638,15 @@
   async function sendChatMessage(rawMessage, useSkill) {
     const value = rawMessage.trim();
     if (!value) return;
+    if (streamingAssistantIndex !== null) return;
+    clearStreamJustFinishedTimer();
+    streamJustFinishedIndex = null;
     const messageForAgent = buildMessageWithSkillDirective(value, useSkill);
     pushMessage("user", value);
     chatInputEl.value = "";
     const assistantIndex = pushMessage("assistant", "");
+    streamingAssistantIndex = assistantIndex;
+    renderMessages();
     try {
       const fullText = await callAgentChatApiStream(messageForAgent, (chunk) => {
         appendToMessage(assistantIndex, chunk);
@@ -2409,6 +2661,23 @@
       messages[assistantIndex].content = `\u547C\u53EB Agent API \u5931\u6557\uFF1A${message}`;
       renderMessages();
       setToast(`\u547C\u53EB\u5931\u6557\uFF1A${message}`, "error");
+    } finally {
+      streamingAssistantIndex = null;
+      const replyText = messages[assistantIndex]?.content ?? "";
+      const streamFailed = replyText.startsWith("\u547C\u53EB Agent API \u5931\u6557");
+      if (!streamFailed) {
+        streamJustFinishedIndex = assistantIndex;
+        clearStreamJustFinishedTimer();
+        streamJustFinishedClearTimer = setTimeout(() => {
+          streamJustFinishedClearTimer = null;
+          streamJustFinishedIndex = null;
+          renderMessages();
+        }, 4500);
+      } else {
+        streamJustFinishedIndex = null;
+      }
+      renderMessages();
+      refreshApiCandidatesFromLatestAssistant();
     }
     await saveMessages();
   }
@@ -2423,6 +2692,9 @@
     await sendChatMessage(value, false);
   });
   clearChatButton.addEventListener("click", () => {
+    clearStreamJustFinishedTimer();
+    streamingAssistantIndex = null;
+    streamJustFinishedIndex = null;
     messages = [];
     renderMessages();
     void saveMessages();
@@ -2450,6 +2722,21 @@
     clearFieldError(manualApiPathEl);
     updateManualFormActions();
   });
+  manualApiBodyEl.addEventListener("input", () => {
+    clearFieldError(manualApiBodyEl);
+  });
+  manualApiParamsRowsEl.addEventListener("input", (ev) => {
+    const t = ev.target;
+    if (t?.classList.contains("field-error")) clearFieldError(t);
+  });
+  manualApiHeadersRowsEl.addEventListener("input", (ev) => {
+    const t = ev.target;
+    if (t?.classList.contains("field-error")) clearFieldError(t);
+  });
+  manualApiHeadersRowsEl.addEventListener("change", (ev) => {
+    const t = ev.target;
+    if (t?.classList.contains("field-error")) clearFieldError(t);
+  });
   toggleExecutionResultButton.addEventListener("click", () => {
     const collapsed = executionResultPanelEl.classList.toggle("collapsed");
     toggleExecutionResultButton.textContent = collapsed ? "\u57F7\u884C\u7D50\u679C \u25B8" : "\u57F7\u884C\u7D50\u679C \u25BE";
@@ -2476,8 +2763,13 @@
       setToast("\u8ACB\u5148\u9078\u64C7\u4E00\u500B API\u3002", "error");
       return;
     }
+    const apiKey = (spec.api || spec.path || "").trim();
+    if (!apiKey) {
+      setToast("API \u8B58\u5225\uFF08\u540D\u7A31\u6216\u8DEF\u5F91\uFF09\u4E0D\u5B8C\u6574\u3002", "error");
+      return;
+    }
     const stepData = {
-      api: spec.api || spec.path,
+      api: apiKey,
       path: spec.path,
       requestName: spec.requestName,
       method: spec.method,
@@ -2558,7 +2850,94 @@
     const hint = el.nextElementSibling;
     if (hint && hint.classList.contains("field-error-hint")) hint.remove();
   }
+  function setFieldError(el, hintText) {
+    clearFieldError(el);
+    el.classList.add("field-error");
+    if (hintText) {
+      const span = document.createElement("span");
+      span.className = "field-error-hint";
+      span.textContent = hintText;
+      el.insertAdjacentElement("afterend", span);
+    }
+  }
+  function clearManualApiFormValidationHints() {
+    clearFieldError(manualApiNameEl);
+    clearFieldError(manualApiPathEl);
+    clearFieldError(manualApiBodyEl);
+    manualApiParamsRowsEl.querySelectorAll("input,select").forEach((node) => {
+      clearFieldError(node);
+    });
+    manualApiHeadersRowsEl.querySelectorAll("input,select").forEach((node) => {
+      clearFieldError(node);
+    });
+  }
+  function validateManualApiForm() {
+    clearManualApiFormValidationHints();
+    let ok = true;
+    const name = manualApiNameEl.value.trim();
+    if (!name) {
+      setFieldError(manualApiNameEl, "\u8ACB\u586B\u5BEB API \u540D\u7A31\u3002");
+      ok = false;
+    } else if (!MANUAL_API_NAME_RE.test(name)) {
+      setFieldError(manualApiNameEl, "\u50C5\u9650\u82F1\u6587\u5B57\u6BCD\u3001\u6578\u5B57\u8207\u5E95\u7DDA\uFF0C\u4E14\u9808\u4EE5\u82F1\u6587\u6216\u5E95\u7DDA\u958B\u982D\u3002");
+      ok = false;
+    }
+    const path = manualApiPathEl.value.trim();
+    if (!path) {
+      setFieldError(manualApiPathEl, "\u8ACB\u586B\u5BEB URL\u3002");
+      ok = false;
+    } else if (!isManualApiPathWellFormed(path)) {
+      setFieldError(manualApiPathEl, "\u8ACB\u4F7F\u7528\u5B8C\u6574\u7684 http \u6216 https URL\u3002");
+      ok = false;
+    }
+    if (!isManualApiBodyWellFormed(manualApiBodyEl.value)) {
+      setFieldError(manualApiBodyEl, "Body \u9808\u70BA\u5408\u6CD5 JSON\uFF08\u6216\u7559\u767D\uFF09\u3002");
+      ok = false;
+    }
+    manualApiParamsRowsEl.querySelectorAll(".header-row").forEach((node) => {
+      const row = node;
+      const inputs = row.querySelectorAll("input");
+      const keyIn = inputs[0];
+      const valIn = inputs[1];
+      if (!keyIn || !valIn) return;
+      const key = keyIn.value.trim();
+      const val = valIn.value.trim();
+      if (!key && !val) return;
+      if (!key && val) {
+        setFieldError(keyIn, "\u8ACB\u586B\u5BEB\u53C3\u6578\u9375\u540D\u3002");
+        ok = false;
+      } else if (key && !MANUAL_API_PARAM_KEY_RE.test(key)) {
+        setFieldError(keyIn, "\u9375\u540D\u50C5\u9650\u82F1\u6587\u5B57\u6BCD\u3001\u6578\u5B57\u8207\u5E95\u7DDA\uFF0C\u4E14\u9808\u4EE5\u82F1\u6587\u6216\u5E95\u7DDA\u958B\u982D\u3002");
+        ok = false;
+      }
+    });
+    manualApiHeadersRowsEl.querySelectorAll(".header-row").forEach((node) => {
+      const row = node;
+      const select = row.querySelector(".header-key-select");
+      const custom = row.querySelector(".header-key-custom");
+      const valInput = row.querySelector(".header-value");
+      if (!select || !custom || !valInput) return;
+      let key = "";
+      if (select.value === HEADER_KEY_CUSTOM) key = custom.value.trim();
+      else key = select.value.trim();
+      const val = valInput.value.trim();
+      if (!key && !val) return;
+      if (!key && val) {
+        const target = select.value === HEADER_KEY_CUSTOM ? custom : select;
+        setFieldError(target, "\u8ACB\u9078\u64C7\u6216\u586B\u5BEB Header \u540D\u7A31\u3002");
+        ok = false;
+        return;
+      }
+      if (select.value === HEADER_KEY_CUSTOM && key && !MANUAL_HTTP_HEADER_NAME_RE.test(key)) {
+        setFieldError(custom, "Header \u540D\u7A31\u542B\u6709\u4E0D\u5141\u8A31\u7684\u5B57\u5143\u3002");
+        ok = false;
+      }
+    });
+    if (!ok) setToast("\u8ACB\u4FEE\u6B63\u6A19\u7D05\u6B04\u4F4D\u5F8C\u518D\u5132\u5B58\u3002", "error");
+    return ok;
+  }
   function clearManualForm() {
+    clearManualApiFormValidationHints();
     manualApiNameEl.value = "";
     manualApiPathEl.value = "";
     manualApiPurposeEl.value = "";
@@ -2605,6 +2984,7 @@
     saveBtn.className = "pending-api-save";
     saveBtn.textContent = "\u5132\u5B58\u81F3\u5DF2\u5132\u5B58\u7684 API";
     saveBtn.addEventListener("click", async () => {
+      if (!validateManualApiForm()) return;
       const { name, spec } = buildSpecFromForm();
       if (!name || !spec.path) return;
       const isDup = customApiSpecs.some(
@@ -2628,6 +3008,7 @@
     addStepBtn.className = "pending-api-step";
     addStepBtn.textContent = "\u52A0\u5165\u6D41\u7A0B\u6B65\u9A5F";
     addStepBtn.addEventListener("click", () => {
+      if (!validateManualApiForm()) return;
       const { name, spec } = buildSpecFromForm();
       if (!name || !spec.path) return;
       draftSteps.push({ ...spec, params: [...spec.params ?? []] });
@@ -2658,13 +3039,9 @@
   }
   addManualApiButton.addEventListener("click", async () => {
     if (editingApiIndex < 0 || editingApiIndex >= customApiSpecs.length) return;
+    if (!validateManualApiForm()) return;
     const { name, path, spec } = buildSpecFromForm();
-    if (!name || !path) {
-      if (!name) manualApiNameEl.classList.add("field-error");
-      if (!path) manualApiPathEl.classList.add("field-error");
-      setToast("\u8ACB\u586B\u5BEB\u5FC5\u8981\u6B04\u4F4D\u3002", "error");
-      return;
-    }
+    if (!name || !path) return;
     customApiSpecs[editingApiIndex] = spec;
     clearManualForm();
     renderSavedApis();
@@ -2687,6 +3064,7 @@
       const tail = parsed.url.split("?")[0].split("/").filter(Boolean).pop() || "CustomApi";
       manualApiNameEl.value = `${tail}Request`;
     }
+    clearManualApiFormValidationHints();
     setToast(`\u5DF2\u89E3\u6790 curl\uFF08${parsed.method} ${parsed.url}\uFF09`, "ok");
     setManualApiOpen(true);
     updateManualFormActions();
@@ -2875,8 +3253,46 @@
     authorizeGoogleButton.classList.remove("auth-expired-pulse");
     void authorizeNow();
   });
+  function setPanelSettingsOpen(open) {
+    panelSettingsOverlayEl.classList.toggle("hidden", !open);
+    panelSettingsOverlayEl.setAttribute("aria-hidden", open ? "false" : "true");
+    if (open) closePanelSettingsButton.focus();
+    else openPanelSettingsButton.focus();
+  }
+  openPanelSettingsButton.addEventListener("click", () => setPanelSettingsOpen(true));
+  closePanelSettingsButton.addEventListener("click", () => setPanelSettingsOpen(false));
+  panelSettingsOverlayEl.addEventListener("click", (e) => {
+    if (e.target === panelSettingsOverlayEl) setPanelSettingsOpen(false);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (panelSettingsOverlayEl.classList.contains("hidden")) return;
+    setPanelSettingsOpen(false);
+  });
   closeDockButton.addEventListener("click", () => {
     chrome?.runtime?.sendMessage({ type: CLOSE_HELLO_DOCK });
+  });
+  function postDockToHostMessage(msg) {
+    window.parent?.postMessage(msg, "*");
+  }
+  if (dockShellDragGripEl) {
+    dockShellDragGripEl.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      postDockToHostMessage({
+        source: PANEL_TO_HOST_SOURCE,
+        kind: "dock-drag-start",
+        iframeClientX: e.clientX,
+        iframeClientY: e.clientY
+      });
+    });
+    dockShellDragGripEl.addEventListener("dblclick", (e) => {
+      e.preventDefault();
+      postDockToHostMessage({ source: PANEL_TO_HOST_SOURCE, kind: "dock-drag-reset-dblclick" });
+    });
+  }
+  minimizeDockButton.addEventListener("click", () => {
+    postDockToHostMessage({ source: PANEL_TO_HOST_SOURCE, kind: "dock-minimize" });
   });
   exportDraftWorkflowJsonButton.addEventListener("click", () => {
     if (!draftSteps.length) {
@@ -2945,6 +3361,7 @@
   setWorkflowPanelOpen(true);
   renderManualHeaderRowsFromObject({});
   renderManualParamsRows([]);
+  bindChatMarkdownCopyOnce();
   void loadMessages();
   draftWorkflowNameInputEl.addEventListener("input", () => {
     currentWorkflowName = draftWorkflowNameInputEl.value;
@@ -2965,13 +3382,17 @@
     const handle = document.getElementById("chatResizeHandle");
     if (!handle) return;
     const saved = sessionStorage.getItem(CHAT_HEIGHT_KEY);
-    if (saved) chatMessagesEl.style.height = saved;
+    if (saved) {
+      chatMessagesEl.style.height = saved;
+      chatMessagesEl.classList.add("chat-messages--user-height");
+    }
     let startY = 0;
     let startH = 0;
     function onMouseMove(e) {
       const delta = e.clientY - startY;
       const newH = Math.max(80, startH + delta);
-      chatMessagesEl.style.height = newH + "px";
+      chatMessagesEl.classList.add("chat-messages--user-height");
+      chatMessagesEl.style.height = `${newH}px`;
     }
     function onMouseUp() {
       document.removeEventListener("mousemove", onMouseMove);
@@ -2983,6 +3404,7 @@
       e.preventDefault();
       startY = e.clientY;
       startH = chatMessagesEl.offsetHeight;
+      chatMessagesEl.classList.add("chat-messages--user-height");
       handle.classList.add("dragging");
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);

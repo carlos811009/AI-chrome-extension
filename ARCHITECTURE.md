@@ -6,13 +6,13 @@
 
 ## 1. 系統目標與目前定位
 
-| 目標 | 目前作法 |
-|------|----------|
-| 在任意網頁側邊快速操作 API 流程 | content script 建立右側 dock，iframe 載入 `panel.html` |
+| 目標                                    | 目前作法                                                |
+| --------------------------------------- | ------------------------------------------------------- |
+| 在任意網頁側邊快速操作 API 流程         | content script 建立右側 dock，iframe 載入 `panel.html`  |
 | 讓非工程使用者可從對話直接轉成 API 步驟 | `panel.ts` 解析 assistant 內容（含 curl）→ API 候選清單 |
-| 將常用 API 與流程持久化 | `chrome.storage.local` 儲存已儲存 API / 流程 / 執行結果 |
-| 呼叫前可檢查與編輯參數 | API 設定區提供 URL params、headers、body 編輯 |
-| 授權失效可立即提示 | 統一走 `notifyAuthExpired()`，更新 status + toast |
+| 將常用 API 與流程持久化                 | `chrome.storage.local` 儲存已儲存 API / 流程 / 執行結果 |
+| 呼叫前可檢查與編輯參數                  | API 設定區提供 URL params、headers、body 編輯           |
+| 授權失效可立即提示                      | 統一走 `notifyAuthExpired()`，更新 status + toast       |
 
 ---
 
@@ -50,23 +50,28 @@
 ## 3. 面板 UI 區塊用途（`panel.html` 對應）
 
 ### 3.1 AI 小幫手區塊
+
 - 提供對話輸入與回應顯示。
 - 最新 assistant 回應會被用於抽取 API 候選。
 
 ### 3.2 已儲存 API 區塊
+
 - 顯示使用者已存 API。
 - 每筆支援 `選擇` / `刪除`（刪除需二次確認）。
 - 選擇後會把該筆帶入 API 設定。
 
 ### 3.3 解析 Curl 區塊
+
 - 貼入 curl 後解析 method/url/headers/body。
 - 可轉為候選或自訂 API 表單資料。
 
 ### 3.4 API 候選清單
+
 - 顯示從對話抽取到的 API 候選。
 - 選中後可直接加入流程或另存已儲存 API。
 
 ### 3.5 API 設定區（核心）
+
 - 欄位：API 名稱、用途、URL params、Headers、Body。
 - 動作：
   - `加入流程步驟`
@@ -74,6 +79,7 @@
   - `更新已儲存 API`（僅已儲存 API 選入時顯示）
 
 ### 3.6 流程草稿區
+
 - **流程名稱**輸入欄（載入已儲存流程或匯入 JSON 會帶入；儲存時必填；與已儲存流程 trim 後同名須 `confirm`）。
 - 目前執行序列（可編輯、刪除；**刪除單一步驟**需二次確認）。
 - **分享／匯入流程（JSON）**：`personal-extension-workflow` v1；匯出剝除敏感 header；匯入至草稿前有說明對話框（若與既有流程同名或步驟 method+path 序列相同會顯示醒目橫幅）。
@@ -81,10 +87,12 @@
 - 草稿區提供下載／複製草稿 JSON（已儲存流程卡片**無**「匯出 JSON」）。
 
 ### 3.7 已儲存流程區
+
 - 每筆流程僅 **`載入` / `刪除`**（無匯出 JSON）。
 - 刪除流程需二次確認。
 
 ### 3.8 執行結果區
+
 - 顯示流程執行歷史、各步驟結果、複製與保存 API 快捷操作。
 
 ---
@@ -129,14 +137,14 @@
 
 ## 5. 儲存模型（`chrome.storage.local`）
 
-| Key | 用途 |
-|-----|------|
-| `chatMessages` | 對話紀錄 |
-| `chatSessionId` | 對話 session id |
-| `savedWorkflows` | 已儲存流程 |
-| `execResults` | 最近執行結果 |
-| `authState` | OAuth/Firebase 授權狀態 |
-| `customApis` | 已儲存 API 清單 |
+| Key              | 用途                    |
+| ---------------- | ----------------------- |
+| `chatMessages`   | 對話紀錄                |
+| `chatSessionId`  | 對話 session id         |
+| `savedWorkflows` | 已儲存流程              |
+| `execResults`    | 最近執行結果            |
+| `authState`      | OAuth/Firebase 授權狀態 |
+| `customApis`     | 已儲存 API 清單         |
 
 ---
 
@@ -144,12 +152,12 @@
 
 字串常數定義於 **`src/messages.ts`**（`TOGGLE_HELLO_DOCK` 等），下列表格為語意說明。
 
-| 訊息類型 | 方向 | 用途 |
-|---------|------|------|
-| `TOGGLE_HELLO_DOCK` | background → content | 使用者點擊 extension icon：已注入時切換開／關 dock |
-| `OPEN_HELLO_DOCK` | background → content | 剛注入 content 後：若尚未開啟則建立 dock |
-| `CLOSE_HELLO_DOCK` | panel → background → content | 關閉 dock（`runtime.sendMessage` 後由 background 轉發至 active tab） |
-| `SHOW_HELLO_BANNER` | 任意 extension 端點 → content（本 repo 內無固定發送端） | `payload` 文字在宿主頁顯示浮層 banner |
+| 訊息類型            | 方向                                                    | 用途                                                                 |
+| ------------------- | ------------------------------------------------------- | -------------------------------------------------------------------- |
+| `TOGGLE_HELLO_DOCK` | background → content                                    | 使用者點擊 extension icon：已注入時切換開／關 dock                   |
+| `OPEN_HELLO_DOCK`   | background → content                                    | 剛注入 content 後：若尚未開啟則建立 dock                             |
+| `CLOSE_HELLO_DOCK`  | panel → background → content                            | 關閉 dock（`runtime.sendMessage` 後由 background 轉發至 active tab） |
+| `SHOW_HELLO_BANNER` | 任意 extension 端點 → content（本 repo 內無固定發送端） | `payload` 文字在宿主頁顯示浮層 banner                                |
 
 ---
 
@@ -165,7 +173,7 @@ nvm use          # 讀取專案 .nvmrc（建議 22）
 npm run build
 ```
 
-其他：`npm run typecheck`、`npm run build:dev`／`build:prod`／`build:watch`／`build:css` 見 `docs/OPTIMIZATION_PROGRESS.md`。
+其他：`npm run typecheck`、`npm run lint`、`npm run format:check`、`npm run build:dev`／`build:prod`／`build:watch`／`build:css` 見 `docs/OPTIMIZATION_PROGRESS.md`。
 
 ### 產物
 

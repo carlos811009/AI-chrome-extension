@@ -1,8 +1,8 @@
-import { compile } from "sass";
-import { writeFile } from "node:fs/promises";
+import { compile } from 'sass';
+import { writeFile } from 'node:fs/promises';
 
-const PANEL_SCSS = "src/panel.scss";
-const OUT_CSS = "panel.css";
+const PANEL_SCSS = 'src/panel.scss';
+const OUT_CSS = 'panel.css';
 
 /**
  * @param {"expanded" | "compressed"} style

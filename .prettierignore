@@ -1,0 +1,7 @@
+node_modules
+panel.js
+content.js
+background.js
+panel.css
+bun.lock
+package-lock.json

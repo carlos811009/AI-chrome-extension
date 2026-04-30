@@ -12,12 +12,21 @@
     "build:prod": "PROD=1 node scripts/build.mjs",
     "build:css": "node scripts/build-css.mjs",
     "build:watch": "node scripts/check-node.mjs && node scripts/build-watch.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint \"src/**/*.ts\"",
+    "lint:fix": "eslint \"src/**/*.ts\" --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"scripts/**/*.mjs\" \"*.{json,md,cjs}\" \"docs/**/*.md\" \"AGENT.md\" \"ARCHITECTURE.md\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"scripts/**/*.mjs\" \"*.{json,md,cjs}\" \"docs/**/*.md\" \"AGENT.md\" \"ARCHITECTURE.md\""
   },
   "dependencies": {},
   "devDependencies": {
     "@types/chrome": "^0.1.40",
+    "@typescript-eslint/eslint-plugin": "5.62.0",
+    "@typescript-eslint/parser": "5.62.0",
     "esbuild": "^0.25.9",
+    "eslint": "8.57.0",
+    "eslint-config-prettier": "9.1.0",
+    "prettier": "^3.8.3",
     "sass": "^1.93.2",
     "typescript": "^6.0.3"
   }

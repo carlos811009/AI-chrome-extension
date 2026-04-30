@@ -1,4 +1,4 @@
-export type ChatRole = "user" | "assistant";
+export type ChatRole = 'user' | 'assistant';
 export type ChatMessage = {
   role: ChatRole;
   content: string;
@@ -49,7 +49,7 @@ export type SavedWorkflow = {
 
 /** 流程 JSON 分享格式（單一流程） */
 export type WorkflowExportEnvelope = {
-  format: "personal-extension-workflow";
+  format: 'personal-extension-workflow';
   version: number;
   exportedAt: string;
   workflow: {

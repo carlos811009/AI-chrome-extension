@@ -1,16 +1,18 @@
-import { context } from "esbuild";
-import { writePanelCss } from "./compile-panel-scss.mjs";
+import { context } from 'esbuild';
+import { writePanelCss } from './compile-panel-scss.mjs';
 
-await writePanelCss("expanded");
+await writePanelCss('expanded');
 
 const ctx = await context({
-  entryPoints: ["src/panel.ts", "src/content.ts", "src/background.ts"],
-  outdir: ".",
+  entryPoints: ['src/panel.ts', 'src/content.ts', 'src/background.ts'],
+  outdir: '.',
   bundle: true,
-  format: "iife",
-  target: "chrome114",
+  format: 'iife',
+  target: 'chrome114',
   sourcemap: true,
 });
 
 await ctx.watch();
-console.log("[personal-extension] esbuild watch：panel.js / content.js / background.js（SCSS 請另跑 npm run build:css）");
+console.log(
+  '[personal-extension] esbuild watch：panel.js / content.js / background.js（SCSS 請另跑 npm run build:css）'
+);
