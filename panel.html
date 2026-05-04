@@ -67,6 +67,7 @@
         </div>
         <div class="chat-header-meta">
           <p id="authStatus" class="auth-status-text"></p>
+          <p id="backendApiHint" class="backend-api-hint hidden" aria-live="polite"></p>
           <pre id="oauthInfo" class="oauth-info"></pre>
         </div>
       </header>
@@ -230,7 +231,47 @@
           </button>
         </div>
         <div class="panel-settings-dialog__body">
-          <p class="panel-settings-dialog__hint">偏好與進階選項可日後擴充於此。</p>
+          <p class="panel-settings-dialog__hint">
+            金鑰與端點預設來自建置期 <code>.env</code>；下方覆寫寫入本機
+            <code>chrome.storage.local</code>，且<strong>優先於建置預設</strong>（與
+            <a href="docs/env-and-secrets-pattern.md" target="_blank" rel="noopener">環境與密鑰規格</a> 一致）。
+          </p>
+          <section class="panel-settings-env" aria-labelledby="panelSettingsEnvTitle">
+            <h3 id="panelSettingsEnvTitle" class="panel-settings-env__title">測試／正式環境</h3>
+            <div class="panel-settings-env-toggle" role="group" aria-label="切換正式或測試環境">
+              <button type="button" id="envToggleStaging" class="panel-settings-env-btn">測試環境</button>
+              <button type="button" id="envToggleProduction" class="panel-settings-env-btn">正式環境</button>
+            </div>
+            <p id="envEffectiveSummary" class="panel-settings-env__summary" aria-live="polite"></p>
+            <label class="panel-settings-field">
+              <span class="panel-settings-field__label">FIREBASE_WEB_API_KEY（覆寫；留空則用建置預設）</span>
+              <input
+                type="password"
+                id="settingsFirebaseWebApiKey"
+                class="panel-settings-field__input"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </label>
+            <label class="panel-settings-field">
+              <span class="panel-settings-field__label">GOOGLE_OAUTH_CLIENT_ID（覆寫；留空則用建置預設）</span>
+              <input
+                type="password"
+                id="settingsGoogleOAuthClientId"
+                class="panel-settings-field__input"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </label>
+            <div class="panel-settings-env-actions">
+              <button type="button" id="saveEnvOverridesButton" class="panel-settings-primary-btn">
+                儲存此環境覆寫
+              </button>
+              <button type="button" id="clearEnvOverridesButton" class="panel-settings-secondary-btn">
+                清除此環境覆寫
+              </button>
+            </div>
+          </section>
         </div>
       </div>
     </div>

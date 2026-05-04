@@ -7,12 +7,17 @@ export const EXEC_RESULTS_KEY = 'execResults';
 export const AUTH_STATE_KEY = 'authState';
 export const CUSTOM_APIS_KEY = 'customApis';
 export const MAX_MESSAGES = 40;
-export const GOOGLE_OAUTH_CLIENT_ID = '';
 export const GOOGLE_OAUTH_SCOPE = 'openid email profile';
 /** 僅允許此 Google Workspace 網域使用本擴充（OAuth userinfo 之 email） */
 export const ALLOWED_GOOGLE_EMAIL_SUFFIX = '';
-// TODO: 需要替換
-export const FIREBASE_WEB_API_KEY = '';
-export const AGENT_CHAT_API = '';
+
+/** 執行期環境覆寫（activeEnv + 各環境 Firebase／OAuth Client Id），見 docs/env-and-secrets-pattern.md */
+export const RUNTIME_ENV_SETTINGS_KEY = 'personalExtRuntimeEnvSettings';
+
+/**
+ * 未於 `.env` 設定 Agent URL 時的後備（與舊版硬編碼對齊）。
+ * 正式／測試 URL 請優先以 `PERSONAL_EXT_AGENT_CHAT_URL_*` 建置注入。
+ */
+export const LEGACY_FALLBACK_AGENT_CHAT_URL = '';
 
 export const MAX_EXEC_RESULTS = 10;

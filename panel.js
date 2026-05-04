@@ -10,12 +10,136 @@
   var AUTH_STATE_KEY = "authState";
   var CUSTOM_APIS_KEY = "customApis";
   var MAX_MESSAGES = 40;
-  var GOOGLE_OAUTH_CLIENT_ID = "";
   var GOOGLE_OAUTH_SCOPE = "openid email profile";
   var ALLOWED_GOOGLE_EMAIL_SUFFIX = "";
-  var FIREBASE_WEB_API_KEY = "";
-  var AGENT_CHAT_API = "";
+  var RUNTIME_ENV_SETTINGS_KEY = "personalExtRuntimeEnvSettings";
+  var LEGACY_FALLBACK_AGENT_CHAT_URL = "";
   var MAX_EXEC_RESULTS = 10;
+
+  // src/env-injected.ts
+  function normalizeDefaultEnv(raw) {
+    return raw === "production" ? "production" : "staging";
+  }
+  function getBuildTimeEnv() {
+    return {
+      stagingAgentChatUrl: "",
+      productionAgentChatUrl: "",
+      stagingFirebaseWebApiKey: "",
+      productionFirebaseWebApiKey: "",
+      stagingGoogleOAuthClientId: "",
+      productionGoogleOAuthClientId: "",
+      defaultActiveEnv: normalizeDefaultEnv("staging")
+    };
+  }
+
+  // src/panel/env-runtime.ts
+  var emptyOverrides = () => ({
+    firebaseWebApiKey: "",
+    googleOAuthClientId: ""
+  });
+  function defaultSettings() {
+    return {
+      version: 1,
+      activeEnv: getBuildTimeEnv().defaultActiveEnv,
+      overrides: {
+        staging: emptyOverrides(),
+        production: emptyOverrides()
+      }
+    };
+  }
+  var cached = defaultSettings();
+  function buildDefaultForEnv(env) {
+    const b = getBuildTimeEnv();
+    if (env === "staging") {
+      return {
+        firebaseWebApiKey: b.stagingFirebaseWebApiKey,
+        googleOAuthClientId: b.stagingGoogleOAuthClientId
+      };
+    }
+    return {
+      firebaseWebApiKey: b.productionFirebaseWebApiKey,
+      googleOAuthClientId: b.productionGoogleOAuthClientId
+    };
+  }
+  function coerceSaved(raw) {
+    const base = defaultSettings();
+    if (!raw || typeof raw !== "object") return base;
+    const o = raw;
+    if (o.version !== 1) return base;
+    const ae = o.activeEnv === "production" ? "production" : "staging";
+    const ov = o.overrides;
+    if (!ov || typeof ov !== "object") return { ...base, activeEnv: ae };
+    const s = ov.staging;
+    const p = ov.production;
+    const readPair = (x) => {
+      if (!x || typeof x !== "object") return emptyOverrides();
+      const r = x;
+      return {
+        firebaseWebApiKey: typeof r.firebaseWebApiKey === "string" ? r.firebaseWebApiKey : "",
+        googleOAuthClientId: typeof r.googleOAuthClientId === "string" ? r.googleOAuthClientId : ""
+      };
+    };
+    return {
+      version: 1,
+      activeEnv: ae,
+      overrides: {
+        staging: readPair(s),
+        production: readPair(p)
+      }
+    };
+  }
+  function hydrateRuntimeEnvFromSaved(raw) {
+    cached = coerceSaved(raw);
+  }
+  function getActiveEnv() {
+    return cached.activeEnv;
+  }
+  function setActiveEnv(env) {
+    cached = { ...cached, activeEnv: env };
+  }
+  function getEffectiveAgentChatUrl() {
+    const b = getBuildTimeEnv();
+    const url = cached.activeEnv === "staging" ? b.stagingAgentChatUrl.trim() : b.productionAgentChatUrl.trim();
+    if (url) return url;
+    return LEGACY_FALLBACK_AGENT_CHAT_URL.trim();
+  }
+  function getEffectiveFirebaseWebApiKey() {
+    const env = cached.activeEnv;
+    const trimmed = cached.overrides[env].firebaseWebApiKey.trim();
+    if (trimmed) return trimmed;
+    return buildDefaultForEnv(env).firebaseWebApiKey.trim();
+  }
+  function getEffectiveGoogleOAuthClientId() {
+    const env = cached.activeEnv;
+    const trimmed = cached.overrides[env].googleOAuthClientId.trim();
+    if (trimmed) return trimmed;
+    return buildDefaultForEnv(env).googleOAuthClientId.trim();
+  }
+  function getOverrideFieldsForActiveEnv() {
+    return { ...cached.overrides[cached.activeEnv] };
+  }
+  function updateOverridesForActiveEnv(patch) {
+    cached = {
+      ...cached,
+      overrides: {
+        ...cached.overrides,
+        [cached.activeEnv]: { ...patch }
+      }
+    };
+  }
+  function snapshotRuntimeEnvSettings() {
+    return {
+      version: 1,
+      activeEnv: cached.activeEnv,
+      overrides: {
+        staging: { ...cached.overrides.staging },
+        production: { ...cached.overrides.production }
+      }
+    };
+  }
+  function runtimeEnvSettingsToJson() {
+    return JSON.stringify(snapshotRuntimeEnvSettings());
+  }
 
   // src/panel/api-extraction.ts
   function normalizeCurlSmartQuotes(text) {
@@ -333,6 +457,13 @@
   var openPanelSettingsButton = document.getElementById("openPanelSettings");
   var panelSettingsOverlayEl = document.getElementById("panelSettingsOverlay");
   var closePanelSettingsButton = document.getElementById("closePanelSettings");
+  var envToggleStagingButton = document.getElementById("envToggleStaging");
+  var envToggleProductionButton = document.getElementById("envToggleProduction");
+  var envEffectiveSummaryEl = document.getElementById("envEffectiveSummary");
+  var settingsFirebaseWebApiKeyEl = document.getElementById("settingsFirebaseWebApiKey");
+  var settingsGoogleOAuthClientIdEl = document.getElementById("settingsGoogleOAuthClientId");
+  var saveEnvOverridesButton = document.getElementById("saveEnvOverridesButton");
+  var clearEnvOverridesButton = document.getElementById("clearEnvOverridesButton");
   var oauthInfoEl = document.getElementById("oauthInfo");
   var toggleWorkflowsButton = document.getElementById("toggleWorkflows");
   var workflowPanelEl = document.getElementById("workflowPanel");
@@ -379,6 +510,7 @@
   var executionResultListEl = document.getElementById("executionResultList");
   var clearExecutionResultButton = document.getElementById("clearExecutionResult");
   var panelBodyEl = document.querySelector(".panel-body");
+  var backendApiHintEl = document.getElementById("backendApiHint");
   var exportDraftWorkflowJsonButton = document.getElementById("exportDraftWorkflowJson");
   var copyDraftWorkflowJsonButton = document.getElementById("copyDraftWorkflowJson");
   var importWorkflowJsonInputEl = document.getElementById("importWorkflowJsonInput");
@@ -419,6 +551,7 @@
   var editingApiIndex = -1;
   var currentWorkflowName = "";
   var draftNameFromImport = false;
+  var lastBackendApiAuthHint = null;
   var fallbackStorage = /* @__PURE__ */ new Map();
   var extensionChrome = typeof chrome !== "undefined" ? chrome : void 0;
   function isAuthStateValid(state) {
@@ -445,9 +578,32 @@
       isAuthorized && firebaseIdToken && authExpiresAt > 0 && Date.now() < authExpiresAt && isAllowedAiiiEmail(accountEmail)
     );
   }
+  function updateBackendApiHintDisplay() {
+    if (!backendApiHintEl) return;
+    if (lastBackendApiAuthHint) {
+      backendApiHintEl.textContent = lastBackendApiAuthHint;
+      backendApiHintEl.classList.remove("hidden");
+    } else {
+      backendApiHintEl.textContent = "";
+      backendApiHintEl.classList.add("hidden");
+    }
+  }
+  function clearBackendApiAuthHint() {
+    lastBackendApiAuthHint = null;
+    updateBackendApiHintDisplay();
+  }
+  function reportBackendApiAuthRejection(httpStatus) {
+    lastBackendApiAuthHint = `\u5F8C\u7AEF\u56DE\u50B3 HTTP ${httpStatus}\uFF08\u8207 Google \u6388\u6B0A\u72C0\u614B\u5206\u958B\uFF09\u3002\u767B\u5165\u4ECD\u6709\u6548\uFF1B\u8ACB\u78BA\u8A8D\u5F8C\u7AEF\u6B0A\u9650\u6216\u7A0D\u5F8C\u91CD\u8A66\u3002`;
+    updateBackendApiHintDisplay();
+    setToast(
+      `\u5F8C\u7AEF\u62D2\u7D55\u8ACB\u6C42\uFF08${httpStatus}\uFF09\u3002\u672A\u6E05\u9664 Google \u6388\u6B0A\uFF0C\u8ACB\u78BA\u8A8D\u6B0A\u9650\u6216\u7A0D\u5F8C\u91CD\u8A66\u3002`,
+      "error",
+      7e3
+    );
+  }
   function syncPanelBodyAuthLock() {
-    if (!panelBodyEl) return;
-    panelBodyEl.classList.toggle("panel-body--auth-locked", !canUseAuthenticatedFeatures());
+    const locked = !canUseAuthenticatedFeatures();
+    if (panelBodyEl) panelBodyEl.classList.toggle("panel-body--auth-locked", locked);
   }
   function clearAuthStateInMemory() {
     isAuthorized = false;
@@ -455,6 +611,7 @@
     googleAccessToken = "";
     authExpiresAt = 0;
     accountEmail = "";
+    clearBackendApiAuthHint();
     syncPanelBodyAuthLock();
   }
   function notifyAuthExpired() {
@@ -1667,7 +1824,7 @@
   }
   async function exchangeGoogleTokenForFirebaseIdToken(googleAccessToken2) {
     const endpoint = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${encodeURIComponent(
-      FIREBASE_WEB_API_KEY
+      getEffectiveFirebaseWebApiKey()
     )}`;
     const response = await fetch(endpoint, {
       method: "POST",
@@ -1691,7 +1848,7 @@
     if (!firebaseIdToken) {
       throw new Error("\u5C1A\u672A\u53D6\u5F97 Firebase idToken\uFF0C\u8ACB\u5148\u5B8C\u6210 Google \u6388\u6B0A");
     }
-    const response = await fetch(AGENT_CHAT_API, {
+    const response = await fetch(getEffectiveAgentChatUrl(), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1706,11 +1863,12 @@
     if (!response.ok) {
       const text = await response.text();
       if (response.status === 401 || response.status === 403) {
-        notifyAuthExpired();
+        reportBackendApiAuthRejection(response.status);
         await saveMessages();
       }
       throw new Error(`Agent API \u5931\u6557 (${response.status}) ${text}`);
     }
+    clearBackendApiAuthHint();
     const data = await response.json();
     return data.reply || data.message || data.data?.reply || data.data?.message || JSON.stringify(data);
   }
@@ -1866,7 +2024,7 @@
     if (!firebaseIdToken) {
       throw new Error("\u5C1A\u672A\u53D6\u5F97 Firebase idToken\uFF0C\u8ACB\u5148\u5B8C\u6210 Google \u6388\u6B0A");
     }
-    const response = await fetch(AGENT_CHAT_API, {
+    const response = await fetch(getEffectiveAgentChatUrl(), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1882,11 +2040,12 @@
     if (!response.ok) {
       const text = await response.text();
       if (response.status === 401 || response.status === 403) {
-        notifyAuthExpired();
+        reportBackendApiAuthRejection(response.status);
         await saveMessages();
       }
       throw new Error(`Agent API \u5931\u6557 (${response.status}) ${text}`);
     }
+    clearBackendApiAuthHint();
     if (!response.body) {
       return callAgentChatApi(message);
     }
@@ -2052,14 +2211,16 @@
         WORKFLOWS_KEY,
         AUTH_STATE_KEY,
         CUSTOM_APIS_KEY,
-        EXEC_RESULTS_KEY
+        EXEC_RESULTS_KEY,
+        RUNTIME_ENV_SETTINGS_KEY
       ]) : {
         [STORAGE_KEY]: fallbackStorage.get(STORAGE_KEY),
         [SESSION_ID_KEY]: fallbackStorage.get(SESSION_ID_KEY),
         [WORKFLOWS_KEY]: fallbackStorage.get(WORKFLOWS_KEY),
         [AUTH_STATE_KEY]: fallbackStorage.get(AUTH_STATE_KEY),
         [CUSTOM_APIS_KEY]: fallbackStorage.get(CUSTOM_APIS_KEY),
-        [EXEC_RESULTS_KEY]: fallbackStorage.get(EXEC_RESULTS_KEY)
+        [EXEC_RESULTS_KEY]: fallbackStorage.get(EXEC_RESULTS_KEY),
+        [RUNTIME_ENV_SETTINGS_KEY]: fallbackStorage.get(RUNTIME_ENV_SETTINGS_KEY)
       };
     } catch (err) {
       console.error("[personal-extension] loadMessages: storage.get failed", err);
@@ -2068,6 +2229,7 @@
     try {
       setAuthStatus("\u5C1A\u672A\u6388\u6B0A\uFF0C\u8ACB\u5148\u6309\u300CGoogle \u6388\u6B0A\u300D\u3002", "normal");
       setChatEnabled(false);
+      hydrateRuntimeEnvFromSaved(saved[RUNTIME_ENV_SETTINGS_KEY]);
       if (typeof saved[SESSION_ID_KEY] === "string" && saved[SESSION_ID_KEY]) {
         chatSessionId = saved[SESSION_ID_KEY];
       }
@@ -2171,6 +2333,7 @@
             accountEmail = storedEmail || "(\u7121\u6CD5\u53D6\u5F97 email)";
             isAuthorized = true;
             setChatEnabled(true);
+            clearBackendApiAuthHint();
             setAuthStatus(`\u5DF2\u6388\u6B0A\uFF08${accountEmail}\uFF09`, "ok");
             setOAuthInfo(`account_email: ${accountEmail}`);
             return;
@@ -2259,7 +2422,7 @@
       }
       const redirectUri = extensionChrome.identity.getRedirectURL("oauth2");
       const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-      authUrl.searchParams.set("client_id", GOOGLE_OAUTH_CLIENT_ID);
+      authUrl.searchParams.set("client_id", getEffectiveGoogleOAuthClientId());
       authUrl.searchParams.set("response_type", "token");
       authUrl.searchParams.set("redirect_uri", redirectUri);
       authUrl.searchParams.set("scope", GOOGLE_OAUTH_SCOPE);
@@ -2330,6 +2493,7 @@
       const expiresInSeconds = Number.parseInt(grant.expiresIn || "", 10);
       const safeTtlMs = Number.isFinite(expiresInSeconds) && expiresInSeconds > 0 ? expiresInSeconds * 1e3 : 3600 * 1e3;
       authExpiresAt = Date.now() + safeTtlMs - 6e4;
+      clearBackendApiAuthHint();
       setAuthStatus("OAuth \u6388\u6B0A\u6210\u529F\u3002", "ok");
       setOAuthInfo(`account_email: ${accountEmail}`);
       setAuthStatus(`OAuth \u6388\u6B0A\u6210\u529F\uFF08${accountEmail}\uFF09`, "ok");
@@ -2576,13 +2740,14 @@
           resultText = await resp.text();
         }
         if (resp.ok) {
+          clearBackendApiAuthHint();
           ui.icon.textContent = "\u2705";
           ui.icon.className = "exec-step-icon";
           ui.statusText.textContent = `${resp.status}`;
           ui.row.classList.add("ok");
         } else {
           if (resp.status === 401 || resp.status === 403) {
-            notifyAuthExpired();
+            reportBackendApiAuthRejection(resp.status);
           }
           ui.icon.textContent = "\u274C";
           ui.icon.className = "exec-step-icon";
@@ -3249,14 +3414,78 @@
     authorizeGoogleButton.classList.remove("auth-expired-pulse");
     void authorizeNow();
   });
+  function summarizeAgentEndpointForSettingsUi() {
+    const u = getEffectiveAgentChatUrl();
+    try {
+      const url = new URL(u);
+      return `${url.hostname}${url.pathname}`;
+    } catch {
+      return u.length > 56 ? `${u.slice(0, 56)}\u2026` : u;
+    }
+  }
+  function refreshEnvSettingsUi() {
+    const env = getActiveEnv();
+    envToggleStagingButton.classList.toggle("is-active", env === "staging");
+    envToggleProductionButton.classList.toggle("is-active", env === "production");
+    const f = getOverrideFieldsForActiveEnv();
+    settingsFirebaseWebApiKeyEl.value = f.firebaseWebApiKey;
+    settingsGoogleOAuthClientIdEl.value = f.googleOAuthClientId;
+    envEffectiveSummaryEl.textContent = `\u76EE\u524D\u4F5C\u7528\u4E2D\uFF1A${env === "staging" ? "\u6E2C\u8A66\u74B0\u5883" : "\u6B63\u5F0F\u74B0\u5883"} \xB7 Agent\uFF1A${summarizeAgentEndpointForSettingsUi()}`;
+  }
+  async function persistRuntimeEnvSettings() {
+    const json = runtimeEnvSettingsToJson();
+    const storageLocal = extensionChrome?.storage?.local;
+    try {
+      if (storageLocal) await storageLocal.set({ [RUNTIME_ENV_SETTINGS_KEY]: json });
+      else fallbackStorage.set(RUNTIME_ENV_SETTINGS_KEY, json);
+    } catch (e) {
+      console.error("[personal-extension] persistRuntimeEnvSettings failed", e);
+      setToast("\u74B0\u5883\u8A2D\u5B9A\u5132\u5B58\u5931\u6557\u3002", "error");
+    }
+  }
   function setPanelSettingsOpen(open) {
     panelSettingsOverlayEl.classList.toggle("hidden", !open);
     panelSettingsOverlayEl.setAttribute("aria-hidden", open ? "false" : "true");
-    if (open) closePanelSettingsButton.focus();
-    else openPanelSettingsButton.focus();
+    if (open) {
+      refreshEnvSettingsUi();
+      closePanelSettingsButton.focus();
+    } else {
+      openPanelSettingsButton.focus();
+    }
   }
   openPanelSettingsButton.addEventListener("click", () => setPanelSettingsOpen(true));
   closePanelSettingsButton.addEventListener("click", () => setPanelSettingsOpen(false));
+  envToggleStagingButton.addEventListener("click", () => {
+    setActiveEnv("staging");
+    void persistRuntimeEnvSettings().then(() => {
+      refreshEnvSettingsUi();
+      setToast("\u5DF2\u5207\u63DB\u70BA\u6E2C\u8A66\u74B0\u5883", "ok", 2200);
+    });
+  });
+  envToggleProductionButton.addEventListener("click", () => {
+    setActiveEnv("production");
+    void persistRuntimeEnvSettings().then(() => {
+      refreshEnvSettingsUi();
+      setToast("\u5DF2\u5207\u63DB\u70BA\u6B63\u5F0F\u74B0\u5883", "ok", 2200);
+    });
+  });
+  saveEnvOverridesButton.addEventListener("click", () => {
+    updateOverridesForActiveEnv({
+      firebaseWebApiKey: settingsFirebaseWebApiKeyEl.value.trim(),
+      googleOAuthClientId: settingsGoogleOAuthClientIdEl.value.trim()
+    });
+    void persistRuntimeEnvSettings().then(() => {
+      refreshEnvSettingsUi();
+      setToast("\u5DF2\u5132\u5B58\u6B64\u74B0\u5883\u7684\u91D1\u9470\u8986\u5BEB\uFF08\u975E\u7A7A\u503C\u512A\u5148\u65BC\u5EFA\u7F6E\u9810\u8A2D\uFF09\u3002", "ok", 4e3);
+    });
+  });
+  clearEnvOverridesButton.addEventListener("click", () => {
+    updateOverridesForActiveEnv({ firebaseWebApiKey: "", googleOAuthClientId: "" });
+    void persistRuntimeEnvSettings().then(() => {
+      refreshEnvSettingsUi();
+      setToast("\u5DF2\u6E05\u9664\u6B64\u74B0\u5883\u7684\u8986\u5BEB\uFF0C\u6539\u56DE\u5EFA\u7F6E\u9810\u8A2D\u3002", "ok", 3500);
+    });
+  });
   panelSettingsOverlayEl.addEventListener("click", (e) => {
     if (e.target === panelSettingsOverlayEl) setPanelSettingsOpen(false);
   });

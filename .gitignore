@@ -1,2 +1,7 @@
 node_modules/
 package-lock.json
+.env
+
+# 擴充固定 ID 用私鑰／封裝產物（勿提交）
+*.pem
+*.crx

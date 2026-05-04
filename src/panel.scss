@@ -422,6 +422,15 @@ select {
   cursor: text;
 }
 
+.backend-api-hint {
+  font-size: $font-size-min;
+  color: #fecaca;
+  margin: 0;
+  line-height: 1.35;
+  user-select: text;
+  cursor: text;
+}
+
 .oauth-info {
   font-size: $font-size-min;
   color: rgba(255, 255, 255, 0.65);
@@ -546,7 +555,7 @@ select {
   }
 }
 
-// 未授權：鎖定連結、表單與多數按鈕；保留區塊收合鈕。
+// 未授權：鎖定連結、表單與多數按鈕；保留區塊收合鈕（與執行結果區塊收合）。
 // 勿用 `* { pointer-events: none }`：會讓捲動容器內的子層無法命中，scrollbar / 觸控捲動與 chatResizeHandle 拖曳會失效。
 .panel-body--auth-locked {
   a,
@@ -2782,7 +2791,7 @@ select {
 .panel-settings-dialog {
   background: $bg-white;
   border-radius: $radius-xl;
-  width: min(94vw, 400px);
+  width: min(94vw, 480px);
   max-height: 85vh;
   overflow: hidden;
   display: flex;
@@ -2835,4 +2844,132 @@ select {
   font-size: $font-size-body;
   color: $text-muted;
   line-height: 1.5;
+
+  code {
+    font-size: 0.92em;
+    padding: 0 4px;
+    border-radius: 4px;
+    background: $border-light;
+  }
+
+  a {
+    color: $primary;
+    text-decoration: underline;
+  }
+}
+
+.panel-settings-env {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid $border;
+}
+
+.panel-settings-env__title {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: $text-primary;
+}
+
+.panel-settings-env-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.panel-settings-env-btn {
+  flex: 1;
+  border: 1px solid $border;
+  background: $bg-page;
+  color: $text-primary;
+  font-size: $font-size-body;
+  font-weight: 600;
+  padding: 8px 10px;
+  border-radius: $radius-md;
+  cursor: pointer;
+
+  &:hover {
+    border-color: $primary;
+    color: $primary;
+  }
+
+  &.is-active {
+    border-color: $primary;
+    background: rgba(79, 70, 229, 0.08);
+    color: $primary;
+  }
+}
+
+.panel-settings-env__summary {
+  margin: 0 0 12px;
+  font-size: $font-size-min;
+  color: $text-muted;
+  line-height: 1.45;
+}
+
+.panel-settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.panel-settings-field__label {
+  font-size: $font-size-min;
+  font-weight: 600;
+  color: $text-sub;
+}
+
+.panel-settings-field__input {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: $font-size-body;
+  font-family: $font-mono;
+  padding: 8px 10px;
+  border: 1px solid $border;
+  border-radius: $radius-md;
+  background: #fff;
+
+  &:focus {
+    outline: 2px solid rgba(79, 70, 229, 0.35);
+    outline-offset: 1px;
+  }
+}
+
+.panel-settings-env-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.panel-settings-primary-btn {
+  border: 0;
+  border-radius: $radius-md;
+  padding: 10px 12px;
+  font-size: $font-size-body;
+  font-weight: 700;
+  cursor: pointer;
+  background: linear-gradient(90deg, $primary 0%, $violet 100%);
+  color: #fff;
+
+  &:hover {
+    filter: brightness(1.05);
+  }
+}
+
+.panel-settings-secondary-btn {
+  border: 1px solid $border;
+  border-radius: $radius-md;
+  padding: 8px 12px;
+  font-size: $font-size-body;
+  font-weight: 600;
+  cursor: pointer;
+  background: #fff;
+  color: $text-sub;
+
+  &:hover {
+    border-color: $text-muted;
+    color: $text-primary;
+  }
 }

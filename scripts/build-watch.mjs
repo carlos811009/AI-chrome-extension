@@ -1,5 +1,14 @@
 import { context } from 'esbuild';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import { writePanelCss } from './compile-panel-scss.mjs';
+import { getPersonalExtEnvDefines, logPersonalExtBuildEnvSummary } from './load-env.mjs';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const projectRoot = resolve(__dirname, '..');
+
+logPersonalExtBuildEnvSummary(projectRoot);
+const envDefines = getPersonalExtEnvDefines(projectRoot);
 
 await writePanelCss('expanded');
 
@@ -10,6 +19,7 @@ const ctx = await context({
   format: 'iife',
   target: 'chrome114',
   sourcemap: true,
+  define: envDefines,
 });
 
 await ctx.watch();

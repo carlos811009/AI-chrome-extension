@@ -1,5 +1,6 @@
 {
   "manifest_version": 3,
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsnnuyz/zvgqiC5eNHfYPuzbGXDPgme3suNyrF1kTrOskPWlZNsmI5EUcrHR4n5YeVwWdMGJWUVcwwMvCCjwHHx2PD1X0nxVJWkTfcZTXuCCA8u+5wHW/TqvoQeb30NxvMHsRj031m7Ut8AIgB81Gu9EtnNZiOWzloNYq5DlqkMGJq8JHawHwS0TS69aGUnUWNbHdclJ1N2MJliB79jksDA45F0bsq7S9U6K3NOj9yRIqoQsjI0fVJqAIRBnpLxzmriTpzBp2Dv4RkxMUZX/A0kJZQ8kqRHkY4NP+ky5X7vk4ILvXz10NPIKSZ5F9jx36JORck0Oz6xB+Vpmu/KL1xQIDAQAB",
   "name": "Aiii 個人化小工具",
   "version": "1.0.0",
   "description": "嘗試與 aiii 小幫手對話，建立自己的工作流程",

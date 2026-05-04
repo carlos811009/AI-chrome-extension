@@ -11,22 +11,31 @@ import type {
   WorkflowStep,
 } from './panel/types';
 import {
-  AGENT_CHAT_API,
   ALLOWED_GOOGLE_EMAIL_SUFFIX,
   AUTH_STATE_KEY,
   CUSTOM_APIS_KEY,
   EXEC_RESULTS_KEY,
-  FIREBASE_WEB_API_KEY,
-  GOOGLE_OAUTH_CLIENT_ID,
   GOOGLE_OAUTH_SCOPE,
   MAX_EXEC_RESULTS,
   MAX_MESSAGES,
+  RUNTIME_ENV_SETTINGS_KEY,
   SESSION_ID_KEY,
   STORAGE_KEY,
   WORKFLOWS_KEY,
   WORKFLOW_EXPORT_FORMAT,
   WORKFLOW_EXPORT_VERSION,
 } from './panel/constants';
+import {
+  getActiveEnv,
+  getOverrideFieldsForActiveEnv,
+  getEffectiveAgentChatUrl,
+  getEffectiveFirebaseWebApiKey,
+  getEffectiveGoogleOAuthClientId,
+  hydrateRuntimeEnvFromSaved,
+  runtimeEnvSettingsToJson,
+  setActiveEnv,
+  updateOverridesForActiveEnv,
+} from './panel/env-runtime';
 import {
   extractApiCandidatesFromText,
   inferParamEntries,
@@ -58,6 +67,13 @@ const minimizeDockButton = document.getElementById('minimizeDock') as HTMLButton
 const openPanelSettingsButton = document.getElementById('openPanelSettings') as HTMLButtonElement;
 const panelSettingsOverlayEl = document.getElementById('panelSettingsOverlay') as HTMLDivElement;
 const closePanelSettingsButton = document.getElementById('closePanelSettings') as HTMLButtonElement;
+const envToggleStagingButton = document.getElementById('envToggleStaging') as HTMLButtonElement;
+const envToggleProductionButton = document.getElementById('envToggleProduction') as HTMLButtonElement;
+const envEffectiveSummaryEl = document.getElementById('envEffectiveSummary') as HTMLParagraphElement;
+const settingsFirebaseWebApiKeyEl = document.getElementById('settingsFirebaseWebApiKey') as HTMLInputElement;
+const settingsGoogleOAuthClientIdEl = document.getElementById('settingsGoogleOAuthClientId') as HTMLInputElement;
+const saveEnvOverridesButton = document.getElementById('saveEnvOverridesButton') as HTMLButtonElement;
+const clearEnvOverridesButton = document.getElementById('clearEnvOverridesButton') as HTMLButtonElement;
 const oauthInfoEl = document.getElementById('oauthInfo') as HTMLPreElement;
 const toggleWorkflowsButton = document.getElementById('toggleWorkflows') as HTMLButtonElement;
 const workflowPanelEl = document.getElementById('workflowPanel') as HTMLDivElement;
@@ -104,6 +120,7 @@ const executionResultPanelEl = document.getElementById('executionResultPanel') a
 const executionResultListEl = document.getElementById('executionResultList') as HTMLDivElement;
 const clearExecutionResultButton = document.getElementById('clearExecutionResult') as HTMLButtonElement;
 const panelBodyEl = document.querySelector('.panel-body') as HTMLDivElement | null;
+const backendApiHintEl = document.getElementById('backendApiHint') as HTMLParagraphElement | null;
 const exportDraftWorkflowJsonButton = document.getElementById('exportDraftWorkflowJson') as HTMLButtonElement;
 const copyDraftWorkflowJsonButton = document.getElementById('copyDraftWorkflowJson') as HTMLButtonElement;
 const importWorkflowJsonInputEl = document.getElementById('importWorkflowJsonInput') as HTMLTextAreaElement;
@@ -147,6 +164,8 @@ let editingStepIndex = -1;
 let editingApiIndex = -1;
 let currentWorkflowName = '';
 let draftNameFromImport = false;
+/** 後端 API 回傳 401/403 等（與 Google OAuth／本機 Token 是否仍有效分開） */
+let lastBackendApiAuthHint: string | null = null;
 const fallbackStorage = new Map<string, string>();
 const extensionChrome = typeof chrome !== 'undefined' ? chrome : undefined;
 
@@ -187,9 +206,36 @@ function canUseAuthenticatedFeatures(): boolean {
   );
 }
 
+function updateBackendApiHintDisplay(): void {
+  if (!backendApiHintEl) return;
+  if (lastBackendApiAuthHint) {
+    backendApiHintEl.textContent = lastBackendApiAuthHint;
+    backendApiHintEl.classList.remove('hidden');
+  } else {
+    backendApiHintEl.textContent = '';
+    backendApiHintEl.classList.add('hidden');
+  }
+}
+
+function clearBackendApiAuthHint(): void {
+  lastBackendApiAuthHint = null;
+  updateBackendApiHintDisplay();
+}
+
+/** 後端拒絕憑證時呼叫：不會清除 Google 授權或本機 Token。 */
+function reportBackendApiAuthRejection(httpStatus: number): void {
+  lastBackendApiAuthHint = `後端回傳 HTTP ${httpStatus}（與 Google 授權狀態分開）。登入仍有效；請確認後端權限或稍後重試。`;
+  updateBackendApiHintDisplay();
+  setToast(
+    `後端拒絕請求（${httpStatus}）。未清除 Google 授權，請確認權限或稍後重試。`,
+    'error',
+    7000
+  );
+}
+
 function syncPanelBodyAuthLock(): void {
-  if (!panelBodyEl) return;
-  panelBodyEl.classList.toggle('panel-body--auth-locked', !canUseAuthenticatedFeatures());
+  const locked = !canUseAuthenticatedFeatures();
+  if (panelBodyEl) panelBodyEl.classList.toggle('panel-body--auth-locked', locked);
 }
 
 function clearAuthStateInMemory(): void {
@@ -198,6 +244,7 @@ function clearAuthStateInMemory(): void {
   googleAccessToken = '';
   authExpiresAt = 0;
   accountEmail = '';
+  clearBackendApiAuthHint();
   syncPanelBodyAuthLock();
 }
 
@@ -1564,7 +1611,7 @@ async function fetchGoogleUserInfo(accessToken: string): Promise<GoogleUserInfo>
 
 async function exchangeGoogleTokenForFirebaseIdToken(googleAccessToken: string): Promise<string> {
   const endpoint = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${encodeURIComponent(
-    FIREBASE_WEB_API_KEY
+    getEffectiveFirebaseWebApiKey()
   )}`;
   const response = await fetch(endpoint, {
     method: 'POST',
@@ -1589,7 +1636,7 @@ async function callAgentChatApi(message: string): Promise<string> {
   if (!firebaseIdToken) {
     throw new Error('尚未取得 Firebase idToken，請先完成 Google 授權');
   }
-  const response = await fetch(AGENT_CHAT_API, {
+  const response = await fetch(getEffectiveAgentChatUrl(), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1604,11 +1651,12 @@ async function callAgentChatApi(message: string): Promise<string> {
   if (!response.ok) {
     const text = await response.text();
     if (response.status === 401 || response.status === 403) {
-      notifyAuthExpired();
+      reportBackendApiAuthRejection(response.status);
       await saveMessages();
     }
     throw new Error(`Agent API 失敗 (${response.status}) ${text}`);
   }
+  clearBackendApiAuthHint();
   const data = (await response.json()) as {
     reply?: string;
     message?: string;
@@ -1798,7 +1846,7 @@ async function callAgentChatApiStream(message: string, onDelta: (chunk: string) 
   if (!firebaseIdToken) {
     throw new Error('尚未取得 Firebase idToken，請先完成 Google 授權');
   }
-  const response = await fetch(AGENT_CHAT_API, {
+  const response = await fetch(getEffectiveAgentChatUrl(), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1814,11 +1862,12 @@ async function callAgentChatApiStream(message: string, onDelta: (chunk: string) 
   if (!response.ok) {
     const text = await response.text();
     if (response.status === 401 || response.status === 403) {
-      notifyAuthExpired();
+      reportBackendApiAuthRejection(response.status);
       await saveMessages();
     }
     throw new Error(`Agent API 失敗 (${response.status}) ${text}`);
   }
+  clearBackendApiAuthHint();
   if (!response.body) {
     return callAgentChatApi(message);
   }
@@ -1998,6 +2047,7 @@ async function loadMessages(): Promise<void> {
           AUTH_STATE_KEY,
           CUSTOM_APIS_KEY,
           EXEC_RESULTS_KEY,
+          RUNTIME_ENV_SETTINGS_KEY,
         ])
       : {
           [STORAGE_KEY]: fallbackStorage.get(STORAGE_KEY),
@@ -2006,6 +2056,7 @@ async function loadMessages(): Promise<void> {
           [AUTH_STATE_KEY]: fallbackStorage.get(AUTH_STATE_KEY),
           [CUSTOM_APIS_KEY]: fallbackStorage.get(CUSTOM_APIS_KEY),
           [EXEC_RESULTS_KEY]: fallbackStorage.get(EXEC_RESULTS_KEY),
+          [RUNTIME_ENV_SETTINGS_KEY]: fallbackStorage.get(RUNTIME_ENV_SETTINGS_KEY),
         };
   } catch (err) {
     console.error('[personal-extension] loadMessages: storage.get failed', err);
@@ -2014,6 +2065,8 @@ async function loadMessages(): Promise<void> {
   try {
     setAuthStatus('尚未授權，請先按「Google 授權」。', 'normal');
     setChatEnabled(false);
+
+    hydrateRuntimeEnvFromSaved(saved[RUNTIME_ENV_SETTINGS_KEY]);
 
     if (typeof saved[SESSION_ID_KEY] === 'string' && saved[SESSION_ID_KEY]) {
       chatSessionId = saved[SESSION_ID_KEY] as string;
@@ -2144,6 +2197,7 @@ async function loadMessages(): Promise<void> {
           accountEmail = storedEmail || '(無法取得 email)';
           isAuthorized = true;
           setChatEnabled(true);
+          clearBackendApiAuthHint();
           setAuthStatus(`已授權（${accountEmail}）`, 'ok');
           setOAuthInfo(`account_email: ${accountEmail}`);
           return;
@@ -2243,7 +2297,7 @@ function requestOAuthAuthorization(): Promise<OAuthGrantInfo> {
     }
     const redirectUri = extensionChrome.identity.getRedirectURL('oauth2');
     const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-    authUrl.searchParams.set('client_id', GOOGLE_OAUTH_CLIENT_ID);
+    authUrl.searchParams.set('client_id', getEffectiveGoogleOAuthClientId());
     authUrl.searchParams.set('response_type', 'token');
     authUrl.searchParams.set('redirect_uri', redirectUri);
     authUrl.searchParams.set('scope', GOOGLE_OAUTH_SCOPE);
@@ -2320,6 +2374,7 @@ async function authorizeNow(): Promise<void> {
     const safeTtlMs = Number.isFinite(expiresInSeconds) && expiresInSeconds > 0 ? expiresInSeconds * 1000 : 3600 * 1000;
     // 提前 60 秒視為到期，避免邊界時間觸發 401。
     authExpiresAt = Date.now() + safeTtlMs - 60_000;
+    clearBackendApiAuthHint();
     setAuthStatus('OAuth 授權成功。', 'ok');
     setOAuthInfo(`account_email: ${accountEmail}`);
     setAuthStatus(`OAuth 授權成功（${accountEmail}）`, 'ok');
@@ -2588,13 +2643,14 @@ async function executeDraftWorkflow(): Promise<void> {
         resultText = await resp.text();
       }
       if (resp.ok) {
+        clearBackendApiAuthHint();
         ui.icon.textContent = '✅';
         ui.icon.className = 'exec-step-icon';
         ui.statusText.textContent = `${resp.status}`;
         ui.row.classList.add('ok');
       } else {
         if (resp.status === 401 || resp.status === 403) {
-          notifyAuthExpired();
+          reportBackendApiAuthRejection(resp.status);
         }
         ui.icon.textContent = '❌';
         ui.icon.className = 'exec-step-icon';
@@ -3327,15 +3383,88 @@ authorizeGoogleButton.addEventListener('click', () => {
   void authorizeNow();
 });
 
+function summarizeAgentEndpointForSettingsUi(): string {
+  const u = getEffectiveAgentChatUrl();
+  try {
+    const url = new URL(u);
+    return `${url.hostname}${url.pathname}`;
+  } catch {
+    return u.length > 56 ? `${u.slice(0, 56)}…` : u;
+  }
+}
+
+function refreshEnvSettingsUi(): void {
+  const env = getActiveEnv();
+  envToggleStagingButton.classList.toggle('is-active', env === 'staging');
+  envToggleProductionButton.classList.toggle('is-active', env === 'production');
+  const f = getOverrideFieldsForActiveEnv();
+  settingsFirebaseWebApiKeyEl.value = f.firebaseWebApiKey;
+  settingsGoogleOAuthClientIdEl.value = f.googleOAuthClientId;
+  envEffectiveSummaryEl.textContent = `目前作用中：${
+    env === 'staging' ? '測試環境' : '正式環境'
+  } · Agent：${summarizeAgentEndpointForSettingsUi()}`;
+}
+
+async function persistRuntimeEnvSettings(): Promise<void> {
+  const json = runtimeEnvSettingsToJson();
+  const storageLocal = extensionChrome?.storage?.local;
+  try {
+    if (storageLocal) await storageLocal.set({ [RUNTIME_ENV_SETTINGS_KEY]: json });
+    else fallbackStorage.set(RUNTIME_ENV_SETTINGS_KEY, json);
+  } catch (e) {
+    console.error('[personal-extension] persistRuntimeEnvSettings failed', e);
+    setToast('環境設定儲存失敗。', 'error');
+  }
+}
+
 function setPanelSettingsOpen(open: boolean): void {
   panelSettingsOverlayEl.classList.toggle('hidden', !open);
   panelSettingsOverlayEl.setAttribute('aria-hidden', open ? 'false' : 'true');
-  if (open) closePanelSettingsButton.focus();
-  else openPanelSettingsButton.focus();
+  if (open) {
+    refreshEnvSettingsUi();
+    closePanelSettingsButton.focus();
+  } else {
+    openPanelSettingsButton.focus();
+  }
 }
 
 openPanelSettingsButton.addEventListener('click', () => setPanelSettingsOpen(true));
 closePanelSettingsButton.addEventListener('click', () => setPanelSettingsOpen(false));
+
+envToggleStagingButton.addEventListener('click', () => {
+  setActiveEnv('staging');
+  void persistRuntimeEnvSettings().then(() => {
+    refreshEnvSettingsUi();
+    setToast('已切換為測試環境', 'ok', 2200);
+  });
+});
+
+envToggleProductionButton.addEventListener('click', () => {
+  setActiveEnv('production');
+  void persistRuntimeEnvSettings().then(() => {
+    refreshEnvSettingsUi();
+    setToast('已切換為正式環境', 'ok', 2200);
+  });
+});
+
+saveEnvOverridesButton.addEventListener('click', () => {
+  updateOverridesForActiveEnv({
+    firebaseWebApiKey: settingsFirebaseWebApiKeyEl.value.trim(),
+    googleOAuthClientId: settingsGoogleOAuthClientIdEl.value.trim(),
+  });
+  void persistRuntimeEnvSettings().then(() => {
+    refreshEnvSettingsUi();
+    setToast('已儲存此環境的金鑰覆寫（非空值優先於建置預設）。', 'ok', 4000);
+  });
+});
+
+clearEnvOverridesButton.addEventListener('click', () => {
+  updateOverridesForActiveEnv({ firebaseWebApiKey: '', googleOAuthClientId: '' });
+  void persistRuntimeEnvSettings().then(() => {
+    refreshEnvSettingsUi();
+    setToast('已清除此環境的覆寫，改回建置預設。', 'ok', 3500);
+  });
+});
 
 panelSettingsOverlayEl.addEventListener('click', (e: MouseEvent) => {
   if (e.target === panelSettingsOverlayEl) setPanelSettingsOpen(false);
