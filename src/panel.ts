@@ -44,10 +44,15 @@ import {
 } from './panel/api-extraction';
 import { CLOSE_HELLO_DOCK, PANEL_TO_HOST_SOURCE, type PanelToHostDockMessage } from './messages';
 
+function isEmailDomainRestrictionActive(): boolean {
+  return ALLOWED_GOOGLE_EMAIL_SUFFIX.trim().length > 0;
+}
+
 function isAllowedAiiiEmail(email: string): boolean {
   const normalized = email.trim().toLowerCase();
   if (!normalized.includes('@')) return false;
-  return normalized.endsWith(ALLOWED_GOOGLE_EMAIL_SUFFIX);
+  if (!isEmailDomainRestrictionActive()) return true;
+  return normalized.endsWith(ALLOWED_GOOGLE_EMAIL_SUFFIX.trim().toLowerCase());
 }
 
 // ===== DOM 節點快取 =====
@@ -2184,12 +2189,21 @@ async function loadMessages(): Promise<void> {
         if (!isAllowedAiiiEmail(storedEmail)) {
           clearAuthStateInMemory();
           await saveMessages();
-          setAuthStatus(
-            '此擴充僅限  公司 Google 帳號。已清除不符合網域的授權資料，請改用公司帳號授權。',
-            'error'
-          );
-          setOAuthInfo(storedEmail ? `先前帳號：${storedEmail}` : '先前授權無有效信箱');
-          setToast('僅限  帳號可使用本擴充。', 'error', 8000);
+          if (isEmailDomainRestrictionActive()) {
+            setAuthStatus(
+              `此擴充僅限公司 Google 帳號（網域須為 ${ALLOWED_GOOGLE_EMAIL_SUFFIX.trim()}）。已清除不符合網域的授權資料，請改用符合資格的帳號授權。`,
+              'error'
+            );
+            setOAuthInfo(storedEmail ? `先前帳號：${storedEmail}` : '先前授權無有效信箱');
+            setToast(`僅限 ${ALLOWED_GOOGLE_EMAIL_SUFFIX.trim()} 網域可使用本擴充。`, 'error', 8000);
+          } else {
+            setAuthStatus(
+              '存放的授權信箱無效或無法辨識。已清除授權資料，請重新完成 Google 授權。',
+              'error'
+            );
+            setOAuthInfo(storedEmail ? `先前帳號：${storedEmail}` : '先前授權無有效信箱');
+            setToast('請重新完成 Google 授權。', 'error', 8000);
+          }
         } else {
           firebaseIdToken = parsed.firebaseIdToken;
           googleAccessToken = parsed.googleAccessToken;
@@ -2280,7 +2294,9 @@ function checkIdentityAuthorization(): Promise<{
         resolve({
           authorized: false,
           domainNotAllowed: true,
-          message: `瀏覽器 Google 帳號為 ${userInfo.email}，僅限 ${ALLOWED_GOOGLE_EMAIL_SUFFIX} 可使用本擴充。`,
+          message: isEmailDomainRestrictionActive()
+            ? `瀏覽器 Google 帳號為 ${userInfo.email}，僅限 ${ALLOWED_GOOGLE_EMAIL_SUFFIX.trim()} 可使用本擴充。`
+            : `瀏覽器回報的 Google 帳號格式異常（${userInfo.email}），無法使用本擴充。`,
         });
         return;
       }
@@ -2358,13 +2374,18 @@ async function authorizeNow(): Promise<void> {
       clearAuthStateInMemory();
       setChatEnabled(false);
       await saveMessages();
-      const detail =
-        resolvedEmail !== '(無法取得 email)'
-          ? `目前 Google 帳號為 ${resolvedEmail}，僅限 ${ALLOWED_GOOGLE_EMAIL_SUFFIX} 可使用本擴充。`
-          : `無法取得授權信箱，或信箱非 ${ALLOWED_GOOGLE_EMAIL_SUFFIX}。請確認已使用公司帳號登入 Google。`;
+      const detail = isEmailDomainRestrictionActive()
+        ? resolvedEmail !== '(無法取得 email)'
+          ? `目前 Google 帳號為 ${resolvedEmail}，僅限 ${ALLOWED_GOOGLE_EMAIL_SUFFIX.trim()} 可使用本擴充。`
+          : `無法取得授權信箱，或信箱非 ${ALLOWED_GOOGLE_EMAIL_SUFFIX.trim()}。請確認已使用公司帳號登入 Google。`
+        : '無法取得有效的授權信箱。請確認 OAuth 已包含 userinfo 權限，並重新授權。';
       setAuthStatus(detail, 'error');
       setOAuthInfo(detail);
-      setToast(`僅限 ${ALLOWED_GOOGLE_EMAIL_SUFFIX} 帳號`, 'error', 8000);
+      setToast(
+        isEmailDomainRestrictionActive() ? `僅限 ${ALLOWED_GOOGLE_EMAIL_SUFFIX.trim()} 帳號` : '授權信箱無效',
+        'error',
+        8000
+      );
       return;
     }
     googleAccessToken = grant.accessToken;

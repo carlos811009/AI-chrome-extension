@@ -8,7 +8,7 @@ export const AUTH_STATE_KEY = 'authState';
 export const CUSTOM_APIS_KEY = 'customApis';
 export const MAX_MESSAGES = 40;
 export const GOOGLE_OAUTH_SCOPE = 'openid email profile';
-/** 僅允許此 Google Workspace 網域使用本擴充（OAuth userinfo 之 email） */
+/** 僅允許此 Google Workspace 網域之 email（OAuth userinfo）；留空表示不限制網域 */
 export const ALLOWED_GOOGLE_EMAIL_SUFFIX = '';
 
 /** 執行期環境覆寫（activeEnv + 各環境 Firebase／OAuth Client Id），見 docs/env-and-secrets-pattern.md */
