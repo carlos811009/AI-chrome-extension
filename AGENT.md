@@ -64,7 +64,7 @@
 
 ### C3. 授權與使用限制
 
-- **Google 帳號**：僅 `` 可完成授權；`getProfileUserInfo`／儲存的 `accountEmail` 不符會清除授權並提示。
+- **Google 帳號**：可依 `ALLOWED_GOOGLE_EMAIL_SUFFIX` 限制網域（空則不限制）；`getProfileUserInfo`／儲存的 `accountEmail` 不符設定時會清除授權並提示。
 - **未通過授權**：`.panel-body` 加上 `panel-body--auth-locked`，區塊內僅收合鈕可點；**Google 授權**與 **關閉 dock（×）** 在 header，不受鎖定。
 - **授權失效提醒**：實際 API 呼叫若 401/403 等，統一走 `notifyAuthExpired()`：
   - 狀態列：`授權已失效，請重新點擊「Google 授權」登入。`
@@ -111,7 +111,7 @@
    - 更新已儲存 API 是否命中正確索引
    - 授權失效提示是否同時有 status + toast
    - 刪除操作（步驟／已儲存 API／已儲存流程）是否先彈窗；**清空草稿**不彈窗且一併清空 JSON 區
-   - 非 `` 無法授權；未授權時 panel 主體是否鎖定
+   - 不符合網域設定者無法授權；未授權時 panel 主體是否鎖定
    - 流程 JSON 匯入／匯出與儲存流程名稱、同名 confirm
 
 ---
@@ -120,7 +120,7 @@
 
 - **錨點名稱**：`anchor-2026-04-29-workflow-json-auth-ui`
 - **目前穩定狀態**：
-  - 流程 JSON 分享／匯入、草稿流程名稱、匯入醒目警示、 與 panel 鎖定
+  - 流程 JSON 分享／匯入、草稿流程名稱、匯入醒目警示、授權網域限制與 panel 鎖定
   - 建置流程統一為 `npm run build`
 - **下次建議優先項**：
   1. 將 `confirmDelete()` 改為自訂 modal（避免瀏覽器原生 confirm 體驗不一致）

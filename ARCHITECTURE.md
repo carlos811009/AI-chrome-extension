@@ -43,7 +43,7 @@
   - 不放核心業務邏輯。
 
 - **`panel.ts` / `panel.js`**
-  - 主要產品邏輯：授權（含 `` 限制）、聊天、API 解析、流程編排、流程 JSON、執行、儲存。
+  - 主要產品邏輯：授權（含可選之 Google 帳號網域限制）、聊天、API 解析、流程編排、流程 JSON、執行、儲存。
 
 ---
 
@@ -191,7 +191,7 @@ npm run build
 - `host_permissions: ["<all_urls>"]` 仍受 CORS / Cookie 政策限制。
 - `chrome://`、Chrome Web Store 等頁面通常不可注入 content script。
 - Token/API Key 目前在本機 storage；正式產品需進一步安全設計。
-- **Google 授權**：僅 `` 帳號可通過；未授權時 `.panel-body` 使用 `panel-body--auth-locked`（主體互動鎖定；header 的授權與關閉 dock 仍可用）。
+- **Google 授權**：可依 `ALLOWED_GOOGLE_EMAIL_SUFFIX` 限制網域（後綴為空則不限制）；未授權時 `.panel-body` 使用 `panel-body--auth-locked`（主體互動鎖定；header 的授權與關閉 dock 仍可用）。
 
 ---
 

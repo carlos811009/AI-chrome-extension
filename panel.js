@@ -436,10 +436,14 @@
   var PANEL_TO_HOST_SOURCE = "personalExtDockPanel";
 
   // src/panel.ts
+  function isEmailDomainRestrictionActive() {
+    return ALLOWED_GOOGLE_EMAIL_SUFFIX.trim().length > 0;
+  }
   function isAllowedAiiiEmail(email) {
     const normalized = email.trim().toLowerCase();
     if (!normalized.includes("@")) return false;
-    return normalized.endsWith(ALLOWED_GOOGLE_EMAIL_SUFFIX);
+    if (!isEmailDomainRestrictionActive()) return true;
+    return normalized.endsWith(ALLOWED_GOOGLE_EMAIL_SUFFIX.trim().toLowerCase());
   }
   var toastStatusEl = document.getElementById("toastStatus");
   var toggleChatButton = document.getElementById("toggleChat");
@@ -2320,12 +2324,21 @@
           if (!isAllowedAiiiEmail(storedEmail)) {
             clearAuthStateInMemory();
             await saveMessages();
-            setAuthStatus(
-              "\u6B64\u64F4\u5145\u50C5\u9650  \u516C\u53F8 Google \u5E33\u865F\u3002\u5DF2\u6E05\u9664\u4E0D\u7B26\u5408\u7DB2\u57DF\u7684\u6388\u6B0A\u8CC7\u6599\uFF0C\u8ACB\u6539\u7528\u516C\u53F8\u5E33\u865F\u6388\u6B0A\u3002",
-              "error"
-            );
-            setOAuthInfo(storedEmail ? `\u5148\u524D\u5E33\u865F\uFF1A${storedEmail}` : "\u5148\u524D\u6388\u6B0A\u7121\u6709\u6548\u4FE1\u7BB1");
-            setToast("\u50C5\u9650  \u5E33\u865F\u53EF\u4F7F\u7528\u672C\u64F4\u5145\u3002", "error", 8e3);
+            if (isEmailDomainRestrictionActive()) {
+              setAuthStatus(
+                `\u6B64\u64F4\u5145\u50C5\u9650\u516C\u53F8 Google \u5E33\u865F\uFF08\u7DB2\u57DF\u9808\u70BA ${ALLOWED_GOOGLE_EMAIL_SUFFIX.trim()}\uFF09\u3002\u5DF2\u6E05\u9664\u4E0D\u7B26\u5408\u7DB2\u57DF\u7684\u6388\u6B0A\u8CC7\u6599\uFF0C\u8ACB\u6539\u7528\u7B26\u5408\u8CC7\u683C\u7684\u5E33\u865F\u6388\u6B0A\u3002`,
+                "error"
+              );
+              setOAuthInfo(storedEmail ? `\u5148\u524D\u5E33\u865F\uFF1A${storedEmail}` : "\u5148\u524D\u6388\u6B0A\u7121\u6709\u6548\u4FE1\u7BB1");
+              setToast(`\u50C5\u9650 ${ALLOWED_GOOGLE_EMAIL_SUFFIX.trim()} \u7DB2\u57DF\u53EF\u4F7F\u7528\u672C\u64F4\u5145\u3002`, "error", 8e3);
+            } else {
+              setAuthStatus(
+                "\u5B58\u653E\u7684\u6388\u6B0A\u4FE1\u7BB1\u7121\u6548\u6216\u7121\u6CD5\u8FA8\u8B58\u3002\u5DF2\u6E05\u9664\u6388\u6B0A\u8CC7\u6599\uFF0C\u8ACB\u91CD\u65B0\u5B8C\u6210 Google \u6388\u6B0A\u3002",
+                "error"
+              );
+              setOAuthInfo(storedEmail ? `\u5148\u524D\u5E33\u865F\uFF1A${storedEmail}` : "\u5148\u524D\u6388\u6B0A\u7121\u6709\u6548\u4FE1\u7BB1");
+              setToast("\u8ACB\u91CD\u65B0\u5B8C\u6210 Google \u6388\u6B0A\u3002", "error", 8e3);
+            }
           } else {
             firebaseIdToken = parsed.firebaseIdToken;
             googleAccessToken = parsed.googleAccessToken;
@@ -2406,7 +2419,9 @@
           resolve({
             authorized: false,
             domainNotAllowed: true,
-            message: `\u700F\u89BD\u5668 Google \u5E33\u865F\u70BA ${userInfo.email}\uFF0C\u50C5\u9650 ${ALLOWED_GOOGLE_EMAIL_SUFFIX} \u53EF\u4F7F\u7528\u672C\u64F4\u5145\u3002`
+            message: isEmailDomainRestrictionActive()
+              ? `\u700F\u89BD\u5668 Google \u5E33\u865F\u70BA ${userInfo.email}\uFF0C\u50C5\u9650 ${ALLOWED_GOOGLE_EMAIL_SUFFIX.trim()} \u53EF\u4F7F\u7528\u672C\u64F4\u5145\u3002`
+              : `\u700F\u89BD\u5668\u56DE\u5831\u7684 Google \u5E33\u865F\u683C\u5F0F\u7570\u5E38\uFF08${userInfo.email}\uFF09\uFF0C\u7121\u6CD5\u4F7F\u7528\u672C\u64F4\u5145\u3002`
           });
           return;
         }
@@ -2481,10 +2496,20 @@
         clearAuthStateInMemory();
         setChatEnabled(false);
         await saveMessages();
-        const detail = resolvedEmail !== "(\u7121\u6CD5\u53D6\u5F97 email)" ? `\u76EE\u524D Google \u5E33\u865F\u70BA ${resolvedEmail}\uFF0C\u50C5\u9650 ${ALLOWED_GOOGLE_EMAIL_SUFFIX} \u53EF\u4F7F\u7528\u672C\u64F4\u5145\u3002` : `\u7121\u6CD5\u53D6\u5F97\u6388\u6B0A\u4FE1\u7BB1\uFF0C\u6216\u4FE1\u7BB1\u975E ${ALLOWED_GOOGLE_EMAIL_SUFFIX}\u3002\u8ACB\u78BA\u8A8D\u5DF2\u4F7F\u7528\u516C\u53F8\u5E33\u865F\u767B\u5165 Google\u3002`;
+        const detail = isEmailDomainRestrictionActive()
+          ? resolvedEmail !== "(\u7121\u6CD5\u53D6\u5F97 email)"
+            ? `\u76EE\u524D Google \u5E33\u865F\u70BA ${resolvedEmail}\uFF0C\u50C5\u9650 ${ALLOWED_GOOGLE_EMAIL_SUFFIX.trim()} \u53EF\u4F7F\u7528\u672C\u64F4\u5145\u3002`
+            : `\u7121\u6CD5\u53D6\u5F97\u6388\u6B0A\u4FE1\u7BB1\uFF0C\u6216\u4FE1\u7BB1\u975E ${ALLOWED_GOOGLE_EMAIL_SUFFIX.trim()}\u3002\u8ACB\u78BA\u8A8D\u5DF2\u4F7F\u7528\u516C\u53F8\u5E33\u865F\u767B\u5165 Google\u3002`
+          : "\u7121\u6CD5\u53D6\u5F97\u6709\u6548\u7684\u6388\u6B0A\u4FE1\u7BB1\u3002\u8ACB\u78BA\u8A8D OAuth \u5DF2\u5305\u542B userinfo \u6B0A\u9650\uFF0C\u4E26\u91CD\u65B0\u6388\u6B0A\u3002";
         setAuthStatus(detail, "error");
         setOAuthInfo(detail);
-        setToast(`\u50C5\u9650 ${ALLOWED_GOOGLE_EMAIL_SUFFIX} \u5E33\u865F`, "error", 8e3);
+        setToast(
+          isEmailDomainRestrictionActive()
+            ? `\u50C5\u9650 ${ALLOWED_GOOGLE_EMAIL_SUFFIX.trim()} \u5E33\u865F`
+            : "\u6388\u6B0A\u4FE1\u7BB1\u7121\u6548",
+          "error",
+          8e3
+        );
         return;
       }
       googleAccessToken = grant.accessToken;
